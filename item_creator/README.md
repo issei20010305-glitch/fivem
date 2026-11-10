@@ -30,8 +30,17 @@ This resource therefore installs a small **bridge** into ox_inventory:
 No existing ox_inventory code is changed. The bridge adds each new item to the live item
 list on the server and on every client, and loads the saved items on start.
 
-Images are saved to `ox_inventory/web/images/<name>.png`. Until the next restart the picture
-is sent to players directly; after a restart it is a normal ox_inventory image.
+Images are downloaded once and kept on the server. The first place that works is used:
+
+1. `ox_inventory/web/images/<name>.png`, written by item_creator or, if the server only lets a
+   resource write inside its own folder, by the bridge inside ox_inventory. This is a normal
+   ox_inventory image.
+2. `item_creator/images/<name>.png`
+3. the server's key-value storage (no file access needed)
+
+Every write is read back and compared, so a refused or damaged write is noticed and the next
+place is used. Creating an item never fails because of where the picture is stored. The
+console says which place was used when it is not the first.
 
 All files are written with FiveM's own file functions, so it works on servers where the Node
 runtime is not allowed to write files.

@@ -23,7 +23,6 @@ local ERRORS = {
     timeout            = '画像のダウンロードがタイムアウトしました。',
     too_many_redirects = '画像URLのリダイレクトが多すぎます。',
     download           = '画像をダウンロードできませんでした (%s)。',
-    image_save         = '画像をサーバーに保存できませんでした。ox_inventory/web/images フォルダの書き込み権限を確認してください。',
     save               = 'アイテムを登録できませんでした (%s)。',
 }
 
@@ -253,10 +252,20 @@ AddEventHandler('item_creator:internal:downloaded', function(id, ok, result, bas
     end
 end)
 
----Downloads the image and stores it as ox_inventory/web/images/<name>.png.
+---Writes a binary file and reads it back, so a write that was refused or
+---damaged is noticed immediately.
+local function writeVerified(resource, file, bytes)
+    return write(resource, file, bytes, true) and LoadResourceFile(resource, file) == bytes
+end
+
+---Downloads the image and stores it permanently on the server. Where it ends
+---up depends on what the server allows:
+---  'ox'  - ox_inventory/web/images/<name>.png (a normal ox_inventory image)
+---  'own' - item_creator/images/<name>.png
+---  'kvp' - the server's key-value storage (no file access needed at all)
 ---ox_inventory only ships *.png, so every format gets that name; browsers
 ---detect the real format from the content.
----@return boolean ok, string result data URI or error key
+---@return boolean ok, string result data URI or error key, string? mode
 local function downloadImage(url, name)
     requestId = requestId + 1
     local waiting = promise.new()
@@ -268,12 +277,113 @@ local function downloadImage(url, name)
 
     local mime, base64 = result[2], result[3]
     local bytes = decodeBase64(base64)
+    local file = ('%s.png'):format(name)
+    local mode = 'kvp'
 
-    if not write(OX, ('web/images/%s.png'):format(name), bytes, true) then return false, 'image_save' end
-    write(SELF, ('backup/img_%s.png'):format(name), bytes, true)
+    -- 1. write it ourselves  2. let ox_inventory write into its own folder (bridge)
+    local savedInOx = writeVerified(OX, 'web/images/' .. file, bytes)
+    if not savedInOx then
+        local ok, saved = pcall(function() return exports.ox_inventory:CreatorSaveImage(name, bytes) end)
+        savedInOx = ok and saved == true
+    end
 
-    return true, ('data:%s;base64,%s'):format(mime, base64)
+    if savedInOx then
+        mode = 'ox'
+        write(SELF, ('backup/img_%s'):format(file), bytes, true)
+    elseif writeVerified(SELF, 'images/' .. file, bytes) then
+        mode = 'own'
+    end
+
+    return true, ('data:%s;base64,%s'):format(mime, base64), mode
 end
+
+---------------------------------------------------------------------------
+-- Own storage (server key-value store). Every created item is recorded here
+-- as well, so nothing is lost when a file could not be written.
+---------------------------------------------------------------------------
+local function storedKey(name)
+    return ('item:%s'):format(name)
+end
+
+local function getStored(name)
+    local raw = GetResourceKvpString(storedKey(name))
+    local ok, record = pcall(json.decode, raw or 'null')
+    return ok and type(record) == 'table' and record or nil
+end
+
+local function setStored(name, record)
+    SetResourceKvp(storedKey(name), json.encode(record))
+end
+
+---The picture ox_inventory has to be told about for a stored item (nil when
+---it is a normal file in ox_inventory/web/images).
+local served = {} -- [name] = true: images/<name>.png existed when this resource started
+local synced = false
+
+local function storedImage(name, record)
+    if record.mode == 'ox' then return nil end
+    -- A file in our own folder can only be loaded by players if it was there when
+    -- this resource started; until then the picture is sent to them directly.
+    if record.mode == 'own' and served[name] then
+        return ('nui://%s/images/%s.png'):format(SELF, name)
+    end
+    return record.image
+end
+
+---Runs once when the bridge is available: re-registers what ox_inventory could
+---not load by itself (pictures stored outside its folder, items missing from its file).
+local function syncStored()
+    local known = exports.ox_inventory:CreatorList() or {}
+    local handle = StartFindKvp('item:')
+    local names = {}
+
+    while true do
+        local key = FindKvp(handle)
+        if not key then break end
+        names[#names + 1] = key:sub(6)
+    end
+    EndFindKvp(handle)
+
+    local count = 0
+    for i = 1, #names do
+        local name = names[i]
+        local record = getStored(name)
+        if record and type(record.definition) == 'table' then
+            if not synced and record.mode == 'own' and LoadResourceFile(SELF, ('images/%s.png'):format(name)) then
+                served[name] = true
+            end
+            local image = storedImage(name, record)
+            if image or not known[name] then
+                local ok = exports.ox_inventory:CreatorSave(name, record.definition, image)
+                if ok then count = count + 1 end
+            end
+        end
+    end
+
+    synced = true
+    if count > 0 then
+        log(('re-registered %d item(s) from item_creator storage'):format(count))
+    end
+end
+
+---Makes sure the stored items were handed to ox_inventory (again) once its bridge is up.
+local function ensureSynced()
+    if synced or not bridgeReady() then return end
+    local ok, err = pcall(syncStored)
+    if not ok then log(('^1could not re-register stored items: %s^0'):format(err)) end
+end
+
+-- ox_inventory was restarted: it forgot the pictures we handed over.
+local firstSyncDone = false
+AddEventHandler('onResourceStart', function(resource)
+    if resource ~= OX or not firstSyncDone then return end
+    SetTimeout(3000, function()
+        local keep = served
+        synced = false
+        ensureSynced()
+        served = keep
+    end)
+end)
 
 ---Copy of the created items inside this resource (survives an ox_inventory update).
 local function backupItems()
@@ -364,6 +474,7 @@ end
 lib.callback.register('item_creator:getData', function(src)
     if not isAdmin(src) then return false, ERRORS.no_permission end
     if not bridgeReady() then return false, ERRORS[(bridgeProblem())] end
+    ensureSynced()
     return { items = createdList(), limits = Config.Limits, maxImageKb = math.floor(Config.Image.maxBytes / 1024) }
 end)
 
@@ -379,18 +490,30 @@ local function create(src, input)
 
     -- A new item needs an image; an edited item keeps its image when the field is empty.
     local imageUrl = type(input.image) == 'string' and input.image:gsub('^%s+', ''):gsub('%s+$', '') or ''
+    local previous = getStored(name)
+    local record = { definition = definition, mode = previous and previous.mode or 'ox', image = previous and previous.image }
     local image
     if imageUrl ~= '' then
-        local ok, result = downloadImage(imageUrl, name)
+        local ok, result, mode = downloadImage(imageUrl, name)
         if not ok then return false, ERRORS[result] or ERRORS.download:format(result) end
         image = result
+        served[name] = nil
+        record.mode = mode
+        record.image = mode ~= 'ox' and result or nil
+        if mode ~= 'ox' then
+            log(('image of "%s" could not be written to ox_inventory/web/images - stored in %s instead')
+                :format(name, mode == 'own' and 'item_creator/images' or 'the server key-value storage'))
+        end
     elseif not edited then
         return false, ERRORS.image_required
+    elseif previous then
+        image = storedImage(name, previous)
     end
 
     local ok, err = exports.ox_inventory:CreatorSave(name, definition, image)
     if not ok then return false, err == 'exists' and ERRORS.exists or ERRORS.save:format(err) end
 
+    setStored(name, record)
     backupItems()
     discordLog(src, name, definition, imageUrl, edited)
     print(('^3[item_creator]^0 %s (ID %s) %s item "%s"'):format(GetPlayerName(src), src, edited and 'edited' or 'created', name))
@@ -461,6 +584,8 @@ CreateThread(function()
 
     Wait(3000)
     if bridgeReady() then
+        ensureSynced()
+        firstSyncDone = true
         log('^2ready^0 - the ox_inventory bridge is running.')
     else
         local _, text = bridgeProblem()

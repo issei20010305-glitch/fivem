@@ -24,6 +24,7 @@ files {
     'web/index.html',
     'web/style.css',
     'web/app.js',
+    'images/*.png',
 }
 
 dependencies {

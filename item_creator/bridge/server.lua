@@ -147,6 +147,18 @@ exports('CreatorSave', function(name, definition, image)
     return true
 end)
 
+---Saves an item picture as web/images/<name>.png. Done here because some servers
+---only let a resource write inside its own folder.
+---@param name string
+---@param bytes string raw image data
+---@return boolean saved
+exports('CreatorSaveImage', function(name, bytes)
+    if type(name) ~= 'string' or not name:match('^[a-z0-9_]+$') or type(bytes) ~= 'string' then return false end
+    local file = ('web/images/%s.png'):format(name)
+    if not SaveResourceFile(RESOURCE, file, bytes, #bytes) then return false end
+    return LoadResourceFile(RESOURCE, file) == bytes
+end)
+
 -- A client that just loaded asks for everything created since the server started
 -- (its downloaded data/created_items.lua is the version from server start).
 RegisterNetEvent('ox_inventory:creator:request', function()
