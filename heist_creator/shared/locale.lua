@@ -64,6 +64,12 @@ Locales = {
     heist_completed_absent = 'ヘイスト「%s」は成功しましたが、受付NPCの近くにいなかったためXPは獲得できませんでした。',
     heist_cancelled      = 'ヘイストは中止されました。',
     heist_timeout        = '時間切れ…ヘイスト失敗。',
+    heist_left_area      = 'ヘイストエリアを離れたため、ヘイストは失敗した。',
+    area_warning         = 'ヘイストエリアの外に出ている！ %d秒以内に戻らないとヘイストは失敗する。',
+    area_warning_member  = 'ヘイストエリアの外に出た。全員がエリアを離れるとヘイストは失敗する。',
+    area_back            = 'ヘイストエリアに戻った。',
+    area_released        = 'エリア制限が解除された。もうエリアを離れても失敗にならない。',
+    area_blip            = 'ヘイストエリア',
     heist_left           = 'ヘイストから離脱しました。',
     heist_aborted        = 'ヘイストはサーバーにより中断されました。',
     heist_failed         = 'ヘイスト失敗。',
@@ -130,7 +136,8 @@ Locales = {
 
     -- NPC / police
     npc_target           = 'Heist HUDを開く',
-    police_alert         = '通報: 「%s」で強盗が発生している模様。',
+    police_alert         = '通報: %s',
+    police_default_title = '強盗発生: %s',
     police_blip          = '強盗発生',
 }
 

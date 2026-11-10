@@ -4,6 +4,7 @@ Heists = {
 }
 
 local INTERACTIONS = { key = true, target = true }
+local ALERT_TRIGGERS = { none = true, arrival = true, stage_begin = true, stage_done = true, loot = true }
 
 ---------------------------------------------------------------------------
 -- Sanitizing helpers
@@ -104,6 +105,13 @@ function Heists.Sanitize(input)
         timeLimit      = cleanNumber(input.timeLimit, 0, 600, 0, true),
         startRadius    = cleanNumber(input.startRadius, 3, 100, 15),
         start          = cleanCoords(input.start),
+        areaRadius     = cleanNumber(input.areaRadius, 0, 1000, 0, true),
+        areaCenter     = cleanCoords(input.areaCenter),
+        alertTrigger   = ALERT_TRIGGERS[input.alertTrigger] and input.alertTrigger or 'arrival',
+        alertStage     = cleanNumber(input.alertStage, 1, limits.stages, 1, true),
+        alertCoords    = cleanCoords(input.alertCoords),
+        alertTitle     = cleanString(input.alertTitle, 60, ''),
+        alertCode      = cleanString(input.alertCode, 12, ''),
         stages         = {},
         guards         = {},
         loots          = {},
@@ -191,6 +199,9 @@ function Heists.Sanitize(input)
         end
     end
 
+    if heist.alertStage > #heist.stages then heist.alertStage = #heist.stages end
+    if heist.areaRadius > 0 and heist.areaRadius < 5 then heist.areaRadius = 5 end
+
     return heist
 end
 
@@ -208,6 +219,9 @@ function Heists.Load()
             data.stages = data.stages or {}
             data.guards = data.guards or {}
             data.loots = data.loots or {}
+            data.areaRadius = data.areaRadius or 0
+            data.alertTrigger = data.alertTrigger or 'arrival'
+            data.alertStage = data.alertStage or 1
             -- Heists saved before loot tables became per loot point: every
             -- point inherits the old heist-wide table.
             local legacy = data.rewards

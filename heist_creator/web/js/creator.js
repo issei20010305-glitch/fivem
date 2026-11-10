@@ -14,7 +14,8 @@ const Creator = {
 const CREATOR_TABS = [
     { id: 'basic', label: '基本情報' },
     { id: 'conditions', label: '参加条件・クールダウン' },
-    { id: 'locations', label: '開始地点' },
+    { id: 'locations', label: '開始地点・エリア' },
+    { id: 'alert', label: '警察への通報' },
     { id: 'stages', label: 'ステージ' },
     { id: 'guards', label: 'ガード' },
     { id: 'loots', label: '物色ポイント' },
@@ -31,6 +32,8 @@ function newDraft() {
         requiredXp: 0, xpReward: 100, minPolice: 0, minPlayers: 1,
         maxPlayers: Creator.meta.maxParty || 4, globalCooldown: 60, playerCooldown: 120,
         timeLimit: 30, startRadius: 15, start: null,
+        areaRadius: 0, areaCenter: null,
+        alertTrigger: 'arrival', alertStage: 1, alertCoords: null, alertTitle: '', alertCode: '10-90',
         stages: [], guards: [], loots: [],
     };
 }
@@ -85,16 +88,17 @@ function checkbox(path, label, rerender) {
     return `<label class="check"><input type="checkbox" data-path="${path}" data-type="bool"${rerender ? ' data-rerender' : ''}${getPath(Creator.draft, path) ? ' checked' : ''}><span>${esc(label)}</span></label>`;
 }
 
-function coordsControl(path, withHeading) {
+function coordsControl(path, withHeading, clearable) {
     const c = getPath(Creator.draft, path);
     const text = c
         ? `${num(c.x).toFixed(2)}, ${num(c.y).toFixed(2)}, ${num(c.z).toFixed(2)}${withHeading ? ` / ${num(c.w).toFixed(0)}°` : ''}`
-        : '未設定';
+        : (clearable ? '未設定 (開始地点を使用)' : '未設定');
     return `<div class="coords">
-        <span class="coords-value${c ? '' : ' unset'}">${text}</span>
+        <span class="coords-value${c || clearable ? '' : ' unset'}${c ? '' : ' dim'}">${text}</span>
         <button class="btn small" data-act="pos-current" data-arg="${path}" title="今立っている場所を設定">現在位置</button>
         <button class="btn small" data-act="pos-pick" data-arg="${path}" title="カメラで狙った場所を設定">照準で指定</button>
         <button class="btn small ghost" data-act="pos-tp" data-arg="${path}"${c ? '' : ' disabled'} title="この場所へテレポート">TP</button>
+        ${clearable ? `<button class="btn small ghost" data-act="pos-clear" data-arg="${path}"${c ? '' : ' disabled'} title="未設定に戻す">解除</button>` : ''}
     </div>`;
 }
 
@@ -164,19 +168,55 @@ const TAB_RENDERERS = {
             ${field('制限時間 (分)', numberInput('timeLimit'), '開始地点に到着してからの制限時間。0 = 無制限')}
             ${field('最少参加人数', numberInput('minPlayers', { min: 1, max: maxParty }))}
             ${field('最大参加人数', numberInput('maxPlayers', { min: 1, max: maxParty }))}
-            ${field('サーバー全体クールダウン (分)', numberInput('globalCooldown'), '終了後、誰もこのヘイストを開始できなくなる時間')}
-            ${field('個人クールダウン (分)', numberInput('playerCooldown'), '参加したプレイヤーが再挑戦できるまでの時間')}
+            ${field('サーバー全体クールダウン (分)', numberInput('globalCooldown'), 'ヘイストが開始された瞬間から、誰もこのヘイストを開始できなくなる時間')}
+            ${field('個人クールダウン (分)', numberInput('playerCooldown'), 'ヘイスト終了時 (または離脱時) から、参加したプレイヤーが再挑戦できるまでの時間')}
         </div>
         ${Creator.draft.id ? `<div class="row-actions"><button class="btn" data-act="reset-cooldown">このヘイストのクールダウンをリセット</button></div>` : ''}`;
     },
 
     locations() {
+        const d = Creator.draft;
         return `<div class="form-grid">
             ${field('開始地点', coordsControl('start'), 'クルーが最初に向かう場所。到着するとステージが開始されます', true)}
             ${field('開始地点の半径 (m)', numberInput('startRadius', { min: 3, max: 100 }))}
         </div>
-        <div class="hint-box">ヘイストの完了: すべて終わったら、ヘイストを受注した受付NPCに話しかけると完了になり、XPが付与されます (脱出地点の設定は不要です)。</div>
-        <div class="hint-box">位置の設定方法: 「現在位置」は今立っている場所、「照準で指定」は画面を閉じてカメラで狙った場所を E キーで決定します。</div>`;
+        <div class="sub-title">ヘイストエリア</div>
+        <div class="form-grid">
+            ${field('エリアの半径 (m)', numberInput('areaRadius', { min: 0, max: 1000 }), '0 = エリア制限なし')}
+            <div class="field"></div>
+            ${field('エリアの中心', coordsControl('areaCenter', false, true), '', true)}
+        </div>
+        <div class="hint-box">${num(d.areaRadius) > 0
+            ? 'すべてのステージを突破し、物色を1箇所でも成功させるまでは、クルーがこのエリアの外に出るとヘイストは自動的に失敗します。物色を1箇所成功させるとエリア制限は解除されます。'
+            : 'エリアの半径を設定すると、ステージ突破と最初の物色が終わるまで、エリアの外に出たクルーのヘイストを自動的に失敗させることができます。'}</div>
+        <div class="hint-box">ヘイストの完了: すべて終わったら、ヘイストを受注した受付NPCに話しかけると完了になり、XPが付与されます。</div>`;
+    },
+
+    alert() {
+        const d = Creator.draft;
+        const triggers = [
+            { id: 'none', label: '通報しない' },
+            { id: 'arrival', label: 'クルーが開始地点に到着したとき' },
+            { id: 'stage_begin', label: '指定したステージに着手したとき' },
+            { id: 'stage_done', label: '指定したステージを突破したとき' },
+            { id: 'loot', label: '最初の物色に成功したとき' },
+        ];
+        const usesStage = d.alertTrigger === 'stage_begin' || d.alertTrigger === 'stage_done';
+        const stages = d.stages.map((stage, i) => ({ id: i + 1, label: `ステージ ${i + 1}${stage.label ? ` - ${stage.label}` : ''}` }));
+        return `<div class="form-grid">
+            ${field('通報するタイミング', `<select data-path="alertTrigger" data-rerender>${triggers.map((o) => `<option value="${o.id}"${o.id === d.alertTrigger ? ' selected' : ''}>${o.label}</option>`).join('')}</select>`, '通報は1回のヘイストにつき1度だけ行われます')}
+            ${usesStage
+                ? field('対象のステージ', stages.length > 0
+                    ? `<select data-path="alertStage" data-type="number">${stages.map((o) => `<option value="${o.id}"${o.id === num(d.alertStage, 1) ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`
+                    : '<span class="coords-value unset">先にステージを追加してください</span>')
+                : '<div class="field"></div>'}
+            ${d.alertTrigger === 'none' ? '' : `
+                ${field('通報の件名', textInput('alertTitle', { max: 60, placeholder: `空欄 = 「強盗発生: ${d.name || 'ヘイスト名'}」` }))}
+                ${field('コード', textInput('alertCode', { max: 12, placeholder: '10-90' }))}
+                ${field('通報される場所', coordsControl('alertCoords', false, true), '警察のマップに表示される場所です', true)}
+            `}
+        </div>
+        <div class="hint-box">ps-dispatch が起動している場合は ps-dispatch に通報が送られ、警察官が通報に「対応する」と、この場所がマップにピンされます。起動していない場合は、警察官に通知とマップのマーカーが表示されます。</div>`;
     },
 
     stages() {
@@ -492,6 +532,10 @@ const CREATOR_ACTIONS = {
             setPath(Creator.draft, arg, answer.coords);
             renderCreator();
         }
+    },
+    'pos-clear'(arg) {
+        setPath(Creator.draft, arg, null);
+        renderCreator();
     },
     'pos-tp'(arg) {
         const coords = getPath(Creator.draft, arg);

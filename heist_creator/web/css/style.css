@@ -218,6 +218,8 @@ select option { background: #10131a; }
     border: 1px solid var(--line);
     border-radius: 0.45rem;
 }
+.coords-value.dim { color: var(--mute); font-family: inherit; }
+.sub-title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); margin: 1.4rem 0 0.7rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
 .coords-value.unset { color: var(--red); font-family: inherit; }
 
 .reward-box { padding: 0.7rem; background: #10131a; border: 1px solid var(--line); border-radius: 0.5rem; }

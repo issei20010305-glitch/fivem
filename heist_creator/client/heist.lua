@@ -194,6 +194,7 @@ local function refresh()
         end
     end
 
+    Guidance.SetArea(Config.Area.showOnMap and state.area or nil)
     Interact.Prune(interactions)
     Guidance.PruneBlips(blips)
 
@@ -381,6 +382,8 @@ RegisterNetEvent('heist_creator:client:finish', function(reason, result)
         end
     elseif reason == 'cancelled' then
         Notify(L('heist_cancelled'), 'error')
+    elseif reason == 'left_area' then
+        Notify(L('heist_left_area'), 'error', 10000)
     elseif reason == 'timeout' then
         Notify(L('heist_timeout'), 'error')
     elseif reason == 'left' then

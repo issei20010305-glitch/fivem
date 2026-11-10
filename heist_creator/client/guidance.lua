@@ -60,7 +60,26 @@ function Guidance.SetObjective(data)
     end
 end
 
+local areaBlip, areaKey = nil, nil
+
+---Draws (or removes) the heist area on the map.
+---@param area { x: number, y: number, z: number, radius: number }?
+function Guidance.SetArea(area)
+    local key = area and ('%s:%s:%s'):format(area.x, area.y, area.radius) or nil
+    if key == areaKey then return end
+    areaKey = key
+
+    if areaBlip and DoesBlipExist(areaBlip) then RemoveBlip(areaBlip) end
+    areaBlip = nil
+    if not area then return end
+
+    areaBlip = AddBlipForRadius(area.x, area.y, area.z, area.radius + 0.0)
+    SetBlipColour(areaBlip, 1)
+    SetBlipAlpha(areaBlip, 90)
+end
+
 function Guidance.Clear()
+    Guidance.SetArea(nil)
     Guidance.PruneBlips({})
     lastObjective = nil
     primary = nil

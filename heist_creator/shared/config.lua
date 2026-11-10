@@ -27,17 +27,40 @@ Config.Police = {
     cacheSeconds  = 5,                       -- how long the police count is cached
 }
 
--- Alert sent to police when a crew reaches the starting point.
+-- Police alert. WHEN and WHERE a heist alerts the police is set per heist in
+-- the creator (警察への通報 tab). This block decides HOW the alert is delivered.
 Config.PoliceAlert = {
-    enabled      = true,
+    enabled = true,
+    -- 'auto'        = ps-dispatch when it is running, otherwise the built-in alert
+    -- 'ps-dispatch' = always ps-dispatch
+    -- 'builtin'     = notification + map blip from this resource
+    system = 'auto',
+
+    -- ps-dispatch settings
+    dispatch = {
+        jobs     = { 'leo' }, -- job types that receive the call
+        codeName = 'heist_creator',
+        icon     = 'fas fa-mask',
+        priority = 1,         -- 1 = red
+        sprite   = 161,
+        colour   = 1,
+        scale    = 1.2,
+        length   = 3,         -- minutes the call stays on the map
+        radius   = 0,
+        flash    = true,
+    },
+
+    -- built-in alert settings
     blipSeconds  = 90,
     blipSprite   = 161,
     blipColour   = 1,
-    -- Optional server-side hook for a custom dispatch resource.
-    -- Return true to skip the built-in alert.
+
+    -- Optional server-side hook for another dispatch resource.
+    -- Return true to skip everything above.
     ---@param coords vector3
     ---@param heistName string
-    custom = function(coords, heistName)
+    ---@param alert { title: string, code: string }
+    custom = function(coords, heistName, alert)
         return false
     end,
 }
@@ -109,9 +132,23 @@ Config.XP = {
 ---------------------------------------------------------------------------
 -- Cooldowns (the durations themselves are set per heist in the creator)
 ---------------------------------------------------------------------------
+-- The server-wide cooldown ALWAYS starts the moment a heist is started.
+-- The personal cooldown starts when the heist ends, or when a player leaves it.
 Config.Cooldowns = {
-    -- Apply cooldowns when a heist fails / is cancelled after the crew reached the starting point.
+    -- Also give the personal cooldown when the heist failed / was cancelled.
     applyOnFail = true,
+}
+
+---------------------------------------------------------------------------
+-- Heist area (radius set per heist in the creator, 0 = no area)
+-- Until the crew has finished every stage and looted at least one point, the
+-- heist fails when the crew leaves the area.
+---------------------------------------------------------------------------
+Config.Area = {
+    -- 'all' = fails when EVERY member is outside / 'any' = fails when ONE member is outside
+    mode         = 'all',
+    graceSeconds = 10,   -- time to get back inside before the heist fails
+    showOnMap    = true, -- draw the area on the map while it is active
 }
 
 ---------------------------------------------------------------------------

@@ -20,10 +20,34 @@ RegisterNUICallback('close', function(_, cb)
     cb({})
 end)
 
+-- ps-dispatch: the server asks this client to file the call (ps-dispatch adds
+-- the street name on a client). Responding to the call in ps-dispatch sets
+-- the officer's GPS to these coordinates.
+RegisterNetEvent('heist_creator:client:dispatch', function(data)
+    if type(data) ~= 'table' or GetResourceState('ps-dispatch') ~= 'started' then return end
+    local cfg = Config.PoliceAlert.dispatch
+    exports['ps-dispatch']:CustomAlert({
+        coords = vector3(data.x + 0.0, data.y + 0.0, data.z + 0.0),
+        message = data.title,
+        information = data.information,
+        dispatchCode = cfg.codeName,
+        code = data.code,
+        icon = cfg.icon,
+        priority = cfg.priority,
+        sprite = cfg.sprite,
+        color = cfg.colour,
+        scale = cfg.scale,
+        length = cfg.length,
+        radius = cfg.radius,
+        flash = cfg.flash,
+        jobs = cfg.jobs,
+    })
+end)
+
 -- Built-in police alert (see Config.PoliceAlert).
-RegisterNetEvent('heist_creator:client:policeAlert', function(coords, heistName)
+RegisterNetEvent('heist_creator:client:policeAlert', function(coords, title)
     if type(coords) ~= 'vector3' then return end
-    Notify(L('police_alert', heistName), 'error', 10000)
+    Notify(L('police_alert', title), 'error', 10000)
 
     local blip = AddBlipForCoord(coords.x, coords.y, coords.z)
     SetBlipSprite(blip, Config.PoliceAlert.blipSprite)

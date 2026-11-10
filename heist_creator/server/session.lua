@@ -37,6 +37,58 @@ local function lockExpired(lock)
 end
 
 ---------------------------------------------------------------------------
+-- Heist area and police alert
+---------------------------------------------------------------------------
+---The area the crew has to stay in, or nil when there is none (anymore).
+---It applies until every stage is cleared AND at least one point was looted.
+---@return { x: number, y: number, z: number, radius: number }?
+function Sessions.ActiveArea(session)
+    local heist = session.heist
+    if (heist.areaRadius or 0) <= 0 or not session.reached then return nil end
+    local active = session.phase == 'stages' or (session.phase == 'loot' and session.lootCount == 0)
+    if not active then return nil end
+    local center = heist.areaCenter or heist.start
+    return { x = center.x, y = center.y, z = center.z, radius = heist.areaRadius }
+end
+
+---Alerts the police once per heist, at the moment chosen in the creator.
+---@param session table
+---@param event 'arrival'|'stage_begin'|'stage_done'|'loot'
+---@param src number player that caused it
+---@param stage? number stage index for the stage events
+local function policeAlert(session, event, src, stage)
+    local heist = session.heist
+    if session.alerted or not Config.PoliceAlert.enabled then return end
+    if (heist.alertTrigger or 'arrival') ~= event then return end
+    if stage and stage ~= (heist.alertStage or 1) then return end
+    session.alerted = true
+
+    local position = heist.alertCoords or heist.start
+    local coords = vector3(position.x, position.y, position.z)
+    local alert = {
+        title = heist.alertTitle ~= nil and heist.alertTitle ~= '' and heist.alertTitle or L('police_default_title', heist.name),
+        code = heist.alertCode ~= nil and heist.alertCode ~= '' and heist.alertCode or '10-90',
+    }
+
+    if Config.PoliceAlert.custom and Config.PoliceAlert.custom(coords, heist.name, alert) then return end
+
+    local system = Config.PoliceAlert.system
+    local dispatchRunning = GetResourceState('ps-dispatch') == 'started'
+    if system == 'ps-dispatch' or (system == 'auto' and dispatchRunning) then
+        -- ps-dispatch alerts are created on a client (it adds the street name).
+        TriggerClientEvent('heist_creator:client:dispatch', src, {
+            x = position.x, y = position.y, z = position.z,
+            title = alert.title, code = alert.code, information = heist.name,
+        })
+        return
+    end
+
+    for _, officer in ipairs(Framework.GetPoliceSources()) do
+        TriggerClientEvent('heist_creator:client:policeAlert', officer, coords, alert.title)
+    end
+end
+
+---------------------------------------------------------------------------
 -- State synchronisation
 ---------------------------------------------------------------------------
 local function snapshot(session)
@@ -65,6 +117,7 @@ local function snapshot(session)
         members = members,
         leader = session.party.leader,
         npc = session.npc,
+        area = Sessions.ActiveArea(session),
         timeLeft = timeLeft,
     }
 end
@@ -151,6 +204,10 @@ function Sessions.Start(src, heistId)
         stageLock = nil,
         guards = {},
         reached = false,
+        alerted = false,
+        lootCount = 0,
+        outside = {},       -- [src] = true while a member is outside the heist area
+        outsideSince = nil, -- when the fail countdown started
         startedAt = os.time(),
         deadline = nil,
     }
@@ -162,6 +219,9 @@ function Sessions.Start(src, heistId)
     Sessions.list[session.id] = session
     Sessions.byHeist[heistId] = session
     party.session = session
+
+    -- The server-wide cooldown starts as soon as the heist is started.
+    Cooldowns.Set(heistId, DB.GLOBAL_OWNER, heist.globalCooldown)
 
     local state = snapshot(session)
     for i = 1, size do
@@ -191,13 +251,13 @@ local function deleteGuards(session)
     session.guards = {}
 end
 
+---Personal cooldowns start when the heist ends. (The server-wide cooldown
+---already started with the heist, see Sessions.Start.)
 local function applyCooldowns(session, reason)
-    local apply = reason == 'completed'
-        or (Config.Cooldowns.applyOnFail and session.reached and reason ~= 'restart' and reason ~= 'admin')
-    if not apply then return end
+    if reason == 'restart' or reason == 'admin' then return end
+    if reason ~= 'completed' and not Config.Cooldowns.applyOnFail then return end
 
     local heist = session.heist
-    Cooldowns.Set(heist.id, DB.GLOBAL_OWNER, heist.globalCooldown)
     for _, citizenid in pairs(session.identifiers) do
         Cooldowns.Set(heist.id, citizenid, heist.playerCooldown)
     end
@@ -205,7 +265,7 @@ end
 
 ---Ends a session for everybody.
 ---@param session table
----@param reason 'completed'|'cancelled'|'timeout'|'abandoned'|'restart'|'admin'
+---@param reason 'completed'|'cancelled'|'timeout'|'abandoned'|'left_area'|'restart'|'admin'
 ---@param results? table<number, table> per-player result (completed only)
 function Sessions.End(session, reason, results)
     if not Sessions.list[session.id] then return end
@@ -244,8 +304,15 @@ function Sessions.RemoveMember(session, src, silent)
         if lock.src == src then session.lootLocks[index] = nil end
     end
 
-    -- A player that leaves before the crew arrived is not put on cooldown.
-    if not session.reached then session.identifiers[src] = nil end
+    -- A player that leaves the heist gets the personal cooldown right away.
+    local citizenid = session.identifiers[src]
+    if citizenid then
+        session.identifiers[src] = nil
+        if Config.Cooldowns.applyOnFail then
+            Cooldowns.Set(session.heist.id, citizenid, session.heist.playerCooldown)
+        end
+    end
+    session.outside[src] = nil
 
     if not silent then
         TriggerClientEvent('heist_creator:client:finish', src, 'left')
@@ -263,7 +330,7 @@ local function phaseAfterStages(heist)
     return #heist.loots > 0 and 'loot' or 'extract'
 end
 
-local function arrive(session)
+local function arrive(session, src)
     local heist = session.heist
     session.reached = true
     session.phase = #heist.stages > 0 and 'stages' or phaseAfterStages(heist)
@@ -271,16 +338,7 @@ local function arrive(session)
         session.deadline = os.time() + heist.timeLimit * 60
     end
     Doors.Prepare(session)
-
-    if Config.PoliceAlert.enabled then
-        local coords = toVector(heist.start)
-        local handled = Config.PoliceAlert.custom and Config.PoliceAlert.custom(coords, heist.name)
-        if not handled then
-            for _, officer in ipairs(Framework.GetPoliceSources()) do
-                TriggerClientEvent('heist_creator:client:policeAlert', officer, coords, heist.name)
-            end
-        end
-    end
+    policeAlert(session, 'arrival', src)
 
     Sessions.Sync(session)
 end
@@ -344,6 +402,7 @@ function Sessions.BeginStage(src, index)
     end
 
     session.stageLock = { src = src, at = os.time(), timer = GetGameTimer() }
+    policeAlert(session, 'stage_begin', src, index)
     return true
 end
 
@@ -400,6 +459,7 @@ function Sessions.FinishStage(src, index, success)
         session.phase = phaseAfterStages(heist)
     end
 
+    policeAlert(session, 'stage_done', src, index)
     notifyAll(session, L('stage_done_by', name, index, #heist.stages), 'success')
     if Doors.Unlock(session, stage.doors) then
         notifyAll(session, L('doors_unlocked'), 'info')
@@ -448,6 +508,13 @@ function Sessions.FinishLoot(src, index, completed)
 
     -- Mark as looted BEFORE handing out anything: a second request can never pay out again.
     session.looted[index] = true
+    local hadArea = Sessions.ActiveArea(session) ~= nil
+    session.lootCount = session.lootCount + 1
+    policeAlert(session, 'loot', src)
+    if hadArea then
+        session.outside, session.outsideSince = {}, nil
+        notifyAll(session, L('area_released'), 'info')
+    end
 
     local received = {}
     for i = 1, #loot.rewards do
@@ -545,8 +612,44 @@ function Sessions.EndAll(reason)
     end
 end
 
+---Ends the heist when the crew left the heist area (see Config.Area).
+local function checkArea(session, now)
+    local area = Sessions.ActiveArea(session)
+    if not area then return end
+
+    local outsideCount = 0
+    for i = 1, #session.members do
+        local member = session.members[i]
+        local outside = not isNear(member, area, area.radius)
+        if outside then outsideCount = outsideCount + 1 end
+        if outside ~= (session.outside[member] == true) then
+            session.outside[member] = outside or nil
+            if outside and Config.Area.mode ~= 'any' and outsideCount < #session.members then
+                notify(member, L('area_warning_member'), 'error')
+            end
+        end
+    end
+
+    local failing = Config.Area.mode == 'any' and outsideCount > 0 or outsideCount == #session.members
+    if not failing then
+        if session.outsideSince then
+            session.outsideSince = nil
+            notifyAll(session, L('area_back'), 'success')
+        end
+        return
+    end
+
+    if not session.outsideSince then
+        session.outsideSince = now
+        notifyAll(session, L('area_warning', Config.Area.graceSeconds), 'error')
+    end
+    if now - session.outsideSince >= Config.Area.graceSeconds then
+        Sessions.End(session, 'left_area')
+    end
+end
+
 ---------------------------------------------------------------------------
--- Tick: arrival at the starting point, time limits
+-- Tick: arrival at the starting point, time limits, heist area
 ---------------------------------------------------------------------------
 CreateThread(function()
     while true do
@@ -561,13 +664,15 @@ CreateThread(function()
                     local heist = session.heist
                     for i = 1, #session.members do
                         if isNear(session.members[i], heist.start, heist.startRadius) then
-                            arrive(session)
+                            arrive(session, session.members[i])
                             break
                         end
                     end
                 end
             elseif session.deadline and now >= session.deadline then
                 Sessions.End(session, 'timeout')
+            else
+                checkArea(session, now)
             end
         end
     end

@@ -35,6 +35,7 @@ party and play them together. All in-game text is Japanese.
 | OneSync | required (server-side position checks, guard cleanup) |
 | [ox_doorlock](https://github.com/CommunityOx/ox_doorlock) | optional – unlock doors when a stage is completed |
 | [ps-ui](https://github.com/Project-Sloth/ps-ui) | optional – 5 extra minigames |
+| [ps-dispatch](https://github.com/Project-Sloth/ps-dispatch) | optional – police alerts go to the dispatch |
 | awoken_minigames | optional – 68 extra minigames |
 
 ## Installation
@@ -73,8 +74,9 @@ party and play them together. All in-game text is Japanese.
 2. Fill the tabs from left to right:
    - **基本情報** – name, description, image URL, difficulty, required XP, XP reward.
    - **参加条件・クールダウン** – required police, party size, time limit, cooldowns.
-   - **開始地点** – start point (+ radius). There is no extraction point: the crew returns
-     to the heist NPC to finish.
+   - **開始地点・エリア** – start point (+ radius) and the optional heist area. There is no
+     extraction point: the crew returns to the heist NPC to finish.
+   - **警察への通報** – when and where the police are alerted.
    - **ステージ** – one card per stage: objective text, position, interaction
      (Press E / ox_target), minigame (opens the picker), difficulty, optional required item
      (and whether it is consumed).
@@ -96,6 +98,37 @@ Example loot table for one loot point:
 | black_money | ✓ | 100 % | configurable |
 
 The Heist HUD NPC is placed from the creator as well (**受付NPCの設定**).
+
+## Police alert (警察への通報)
+
+Each heist decides when the police are alerted: never, when the crew arrives, when a chosen
+stage is started or completed, or on the first successful loot. You can also set the call's
+title, code and the location shown to the police (default: the start point). A heist alerts
+once.
+
+- With **ps-dispatch** running, the call is filed there (`CustomAlert`). An officer who responds
+  to the call gets the location set on their map by ps-dispatch.
+- Without it, police get a notification and a temporary map blip from this resource.
+- `Config.PoliceAlert` selects the system (`auto` / `ps-dispatch` / `builtin`), the ps-dispatch
+  job types and blip, and has a `custom` hook for other dispatch resources.
+
+ps-dispatch calls are created on a game client (it adds the street name there), so the call is
+filed by the crew member who caused it.
+
+## Heist area (ヘイストエリア)
+
+In the 開始地点・エリア tab a heist can get an area (radius, and optionally its own centre).
+While the crew has not cleared every stage **and** looted at least one point, leaving the area
+ends the heist (after `Config.Area.graceSeconds`, default 10 s, with a warning). After the
+first successful loot the area no longer applies. Heists without loot points are released
+once every stage is cleared. By default the heist fails when **every** member is outside
+(`Config.Area.mode = 'all'`); set `'any'` to fail as soon as one member leaves.
+
+## Cooldowns
+
+- The **server-wide** cooldown starts the moment a heist is started.
+- The **personal** cooldown starts when the heist ends, or when a player leaves it.
+- A resource restart ends heists without personal cooldowns.
 
 ## Doors (ox_doorlock)
 
@@ -140,7 +173,8 @@ Command names can be changed in `Config.Commands`.
 | `Config.Police` | police job names, on-duty requirement |
 | `Config.PoliceAlert` | built-in police alert / hook for a dispatch resource |
 | `Config.XP` | party bonus, ranks, who needs the required XP, participation distance |
-| `Config.Cooldowns` | whether failed / cancelled heists trigger cooldowns |
+| `Config.Cooldowns` | whether failed / cancelled heists give the personal cooldown |
+| `Config.Area` | heist area: fail mode, grace time, map display |
 | `Config.Party` | party size, invite timeout, nearby radius |
 | `Config.Notify` | Heist HUD bubbles or ox_lib notifications |
 | `Config.Minigames`, `Config.MinigameGroups` | minigame list and picker tabs |
