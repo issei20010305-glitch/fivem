@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>re:IN city</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="rain"></canvas>
+    <div class="vignette"></div>
+
+    <main class="stage">
+        <img id="logo" class="logo" src="logo.png" alt="re:IN city" draggable="false">
+        <p id="tagline" class="tagline"></p>
+    </main>
+
+    <p id="vertical" class="vertical"></p>
+
+    <footer class="foot">
+        <div class="foot-row">
+            <span id="status" class="status"></span>
+            <span class="percent"><span id="percent">0</span><small>%</small></span>
+        </div>
+        <div class="track"><div id="bar" class="bar"></div></div>
+    </footer>
+
+    <button id="sound" class="sound" type="button"></button>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
