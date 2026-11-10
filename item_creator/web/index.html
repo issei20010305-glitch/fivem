@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Item Creator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="page hidden">
+        <div class="window">
+            <header class="head">
+                <div>
+                    <div class="title">アイテム作成</div>
+                    <div class="sub">ox_inventory に新しいアイテムを追加します。再起動は不要です。</div>
+                </div>
+                <button class="icon-btn" id="close" title="閉じる">✕</button>
+            </header>
+
+            <div class="body">
+                <form id="form" class="form" autocomplete="off">
+                    <section>
+                        <h2>基本情報</h2>
+                        <div class="grid">
+                            <label class="field">
+                                <span>スポーン名 <em>必須</em></span>
+                                <input id="name" type="text" maxlength="50" placeholder="例: onigiri" spellcheck="false">
+                                <small>半角の小文字英数字と _ のみ。/giveitem やスクリプトで使う名前です。</small>
+                            </label>
+                            <label class="field">
+                                <span>表示名 <em>必須</em></span>
+                                <input id="label" type="text" maxlength="50" placeholder="例: おにぎり">
+                                <small>インベントリに表示される名前です。</small>
+                            </label>
+                            <label class="field">
+                                <span>重さ (g) <em>必須</em></span>
+                                <input id="weight" type="number" min="0" step="1" value="100">
+                            </label>
+                            <div class="field">
+                                <span>スタック</span>
+                                <label class="switch-row"><input id="stack" type="checkbox" checked><i></i><b>同じスロットに重ねられる</b></label>
+                            </div>
+                            <label class="field wide">
+                                <span>説明 (任意)</span>
+                                <input id="description" type="text" maxlength="200" placeholder="アイテムの説明文">
+                            </label>
+                            <label class="field wide">
+                                <span>画像URL <em id="image-required">必須</em></span>
+                                <input id="image" type="text" placeholder="https://example.com/onigiri.png" spellcheck="false">
+                                <small id="image-hint"></small>
+                            </label>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2>使用したときの効果</h2>
+                        <div class="effects">
+                            <div class="effect" data-effect="heal">
+                                <label class="switch-row"><input type="checkbox" id="healEnabled"><i></i><b>体力を回復する</b></label>
+                                <div class="amount"><input id="heal" type="number" min="1" max="100" value="25"><span>%</span></div>
+                            </div>
+                            <div class="effect" data-effect="hunger">
+                                <label class="switch-row"><input type="checkbox" id="hungerEnabled"><i></i><b>空腹を回復する</b></label>
+                                <div class="amount"><input id="hunger" type="number" min="1" max="100" value="25"><span>%</span></div>
+                            </div>
+                            <div class="effect" data-effect="thirst">
+                                <label class="switch-row"><input type="checkbox" id="thirstEnabled"><i></i><b>喉の渇きを回復する</b></label>
+                                <div class="amount"><input id="thirst" type="number" min="1" max="100" value="25"><span>%</span></div>
+                            </div>
+                            <div class="effect" data-effect="stress">
+                                <label class="switch-row"><input type="checkbox" id="stressEnabled"><i></i><b>ストレスを軽減する</b></label>
+                                <div class="amount"><input id="stress" type="number" min="1" max="100" value="25"><span>%</span></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2>エクスポート</h2>
+                        <div class="effect" data-effect="export">
+                            <label class="switch-row"><input type="checkbox" id="exportEnabled"><i></i><b>使用時に他リソースのエクスポートを呼び出す</b></label>
+                        </div>
+                        <div id="export-fields" class="grid hidden">
+                            <label class="field">
+                                <span>実行する側</span>
+                                <select id="exportSide">
+                                    <option value="client">クライアント</option>
+                                    <option value="server">サーバー</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span>エクスポート名</span>
+                                <input id="export" type="text" maxlength="120" placeholder="リソース名.関数名" spellcheck="false">
+                            </label>
+                            <small class="wide">クライアント側エクスポートを設定した場合、アイテムの消費と上の効果はエクスポート側で <code>exports.ox_inventory:useItem</code> を呼んだときに適用されます。</small>
+                        </div>
+                    </section>
+                </form>
+
+                <aside class="side">
+                    <h2>プレビュー</h2>
+                    <div class="preview">
+                        <div class="slot">
+                            <img id="preview-image" alt="">
+                            <span id="preview-weight" class="slot-weight"></span>
+                            <span id="preview-label" class="slot-label"></span>
+                        </div>
+                        <div class="preview-info">
+                            <div id="preview-name" class="mono"></div>
+                            <div id="preview-effects" class="tags"></div>
+                        </div>
+                    </div>
+
+                    <h2>作成済みアイテム <span id="count"></span></h2>
+                    <div id="list" class="list"></div>
+                </aside>
+            </div>
+
+            <footer class="foot">
+                <div id="message" class="message"></div>
+                <button class="btn ghost" id="reset" type="button">新規入力に戻す</button>
+                <button class="btn primary" id="submit" type="button">アイテムを作成</button>
+            </footer>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
