@@ -179,18 +179,11 @@ local function refresh()
             end
         end
 
-        blips.extraction = true
-        Guidance.SetBlip('extraction', heist.extraction, blipStyles.extraction, L('blip_extraction'))
-        if remaining == 0 then Guidance.SetPrimary('extraction', heist.extraction) end
-
-        interactions.extraction = true
-        if not Interact.Exists('extraction') then
-            Interact.Add('extraction', {
-                coords = vec(heist.extraction),
-                type = 'key',
-                label = L('extract_label'),
-                onUse = doExtract,
-            })
+        -- The heist is handed in at the NPC it was started from (see client/npc.lua).
+        if state.npc then
+            blips.finish = true
+            Guidance.SetBlip('finish', state.npc, blipStyles.finish, L('blip_finish'))
+            if remaining == 0 then Guidance.SetPrimary('finish', state.npc) end
         end
 
         if remaining > 0 then
@@ -337,6 +330,25 @@ end
 
 function IsInHeist()
     return active ~= nil
+end
+
+---Whether the heist can be handed in at the NPC standing at these coordinates.
+---@param x number
+---@param y number
+function CanFinishHeistAt(x, y)
+    if not active then return false end
+    local state = active.state
+    if state.phase ~= 'loot' and state.phase ~= 'extract' then return false end
+    local npc = state.npc
+    return npc ~= nil and math.abs(npc.x - x) < 1.0 and math.abs(npc.y - y) < 1.0
+end
+
+function FinishHeist()
+    if Interact.busy then return end
+    Interact.busy = true
+    local ok, err = pcall(doExtract)
+    Interact.busy = false
+    if not ok then print(('[Heist Creator] %s'):format(err)) end
 end
 
 RegisterNetEvent('heist_creator:client:start', function(heist, state)

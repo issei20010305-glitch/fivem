@@ -8,16 +8,16 @@ const Creator = {
     view: 'heist', // 'heist' | 'npcs'
     tab: 'basic',
     confirmDelete: false,
+    picker: null, // { stage, group } while the minigame picker is open
 };
 
 const CREATOR_TABS = [
     { id: 'basic', label: '基本情報' },
     { id: 'conditions', label: '参加条件・クールダウン' },
-    { id: 'locations', label: '開始・脱出地点' },
+    { id: 'locations', label: '開始地点' },
     { id: 'stages', label: 'ステージ' },
     { id: 'guards', label: 'ガード' },
     { id: 'loots', label: '物色ポイント' },
-    { id: 'rewards', label: '報酬テーブル' },
 ];
 
 const INTERACTIONS = [
@@ -30,14 +30,17 @@ function newDraft() {
         id: null, enabled: true, name: '', description: '', image: '', difficulty: 1,
         requiredXp: 0, xpReward: 100, minPolice: 0, minPlayers: 1,
         maxPlayers: Creator.meta.maxParty || 4, globalCooldown: 60, playerCooldown: 120,
-        timeLimit: 30, startRadius: 15, start: null, extraction: null,
-        stages: [], guards: [], loots: [], rewards: [],
+        timeLimit: 30, startRadius: 15, start: null,
+        stages: [], guards: [], loots: [],
     };
 }
 
 function normalizeHeist(heist) {
     const copy = JSON.parse(JSON.stringify(heist));
-    ['stages', 'guards', 'loots', 'rewards'].forEach((key) => { copy[key] = arr(copy[key]); });
+    ['stages', 'guards', 'loots'].forEach((key) => { copy[key] = arr(copy[key]); });
+    copy.loots.forEach((loot) => { loot.rewards = arr(loot.rewards); });
+    delete copy.rewards;
+    delete copy.extraction;
     copy.stages.forEach((stage) => { stage.doors = arr(stage.doors); });
     return Object.assign(newDraft(), copy);
 }
@@ -171,9 +174,8 @@ const TAB_RENDERERS = {
         return `<div class="form-grid">
             ${field('開始地点', coordsControl('start'), 'クルーが最初に向かう場所。到着するとステージが開始されます', true)}
             ${field('開始地点の半径 (m)', numberInput('startRadius', { min: 3, max: 100 }))}
-            <div class="field"></div>
-            ${field('脱出地点', coordsControl('extraction'), 'ここで「脱出する」とヘイスト成功となりXPが付与されます', true)}
         </div>
+        <div class="hint-box">ヘイストの完了: すべて終わったら、ヘイストを受注した受付NPCに話しかけると完了になり、XPが付与されます (脱出地点の設定は不要です)。</div>
         <div class="hint-box">位置の設定方法: 「現在位置」は今立っている場所、「照準で指定」は画面を閉じてカメラで狙った場所を E キーで決定します。</div>`;
     },
 
@@ -183,7 +185,7 @@ const TAB_RENDERERS = {
             ${field('目標テキスト', textInput(`stages.${i}.label`, { placeholder: '例: ハッキングデバイスでセキュリティを解除せよ' }), '空欄の場合は標準の文言が表示されます', true)}
             ${field('位置', coordsControl(`stages.${i}.coords`), '', true)}
             ${field('インタラクション方式', selectInput(`stages.${i}.interaction`, INTERACTIONS))}
-            ${field('ミニゲーム', selectInput(`stages.${i}.minigame`, arr(Creator.meta.minigames)))}
+            ${field('ミニゲーム', minigameButton(i))}
             ${field('ミニゲーム難易度', selectInput(`stages.${i}.difficulty`, arr(Creator.meta.difficulties)))}
             ${field('必要アイテム', textInput(`stages.${i}.item`, { list: 'dl-items', max: 64, placeholder: '空欄 = 不要' }), 'アイテム名 (例: lockpick)')}
             ${field('必要数', numberInput(`stages.${i}.itemCount`, { min: 1, max: 100 }))}
@@ -217,29 +219,84 @@ const TAB_RENDERERS = {
             ${field('物色にかかる時間 (秒)', numberInput(`loots.${i}.duration`, { min: 1, max: 120 }))}
             <div class="field"></div>
             ${field('位置', coordsControl(`loots.${i}.coords`), '', true)}
-        `)).join('');
-        return `${cards || emptyState('物色ポイントがありません。追加すると、全ステージ突破後にプレイヤーが物色できます。')}
+            <div class="field wide">
+                <span class="field-label">この物色ポイントの報酬テーブル</span>
+                ${rewardTable(i)}
+            </div>
+        `, `<button class="btn small" data-act="duplicate" data-arg="loots.${i}" title="報酬テーブルごと複製します">複製</button>`)).join('');
+        return `<div class="hint-box">物色ポイントごとに報酬テーブルを設定します。物色すると各行が個別に抽選され、複数の報酬が同時に出ることがあります。「確定」は必ず入手できます。「複製」で同じ報酬のポイントを増やせます。</div>
+            ${cards || emptyState('物色ポイントがありません。追加すると、全ステージ突破後にプレイヤーが物色できます。')}
             <div class="row-actions"><button class="btn primary" data-act="add" data-arg="loots">＋ 物色ポイントを追加 (現在位置)</button></div>`;
     },
-
-    rewards() {
-        const d = Creator.draft;
-        const rows = d.rewards.map((reward, i) => `<tr>
-            <td>${textInput(`rewards.${i}.item`, { list: 'dl-items', max: 64, placeholder: 'アイテム名' })}</td>
-            <td class="center">${checkbox(`rewards.${i}.guaranteed`, '確定', true)}</td>
-            <td>${numberInput(`rewards.${i}.chance`, { max: 100, step: 0.1, disabled: reward.guaranteed })}</td>
-            <td>${numberInput(`rewards.${i}.min`, { min: 1 })}</td>
-            <td>${numberInput(`rewards.${i}.max`, { min: 1 })}</td>
-            <td class="center"><button class="btn small danger" data-act="remove" data-arg="rewards.${i}">削除</button></td>
-        </tr>`).join('');
-        return `<div class="hint-box">物色ポイントを1箇所物色するたびに、下の各行が個別に抽選されます。複数の報酬が同時にドロップすることがあり、「確定」の報酬は必ず入手できます。</div>
-            ${rows ? `<table class="table">
-                <thead><tr><th>アイテム</th><th>確定</th><th>確率 (%)</th><th>最小数</th><th>最大数</th><th></th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>` : emptyState('報酬が設定されていません。')}
-            <div class="row-actions"><button class="btn primary" data-act="add" data-arg="rewards">＋ 報酬を追加</button></div>`;
-    },
 };
+
+/** Loot table of one loot point. */
+function rewardTable(lootIndex) {
+    const rewards = arr(Creator.draft.loots[lootIndex].rewards);
+    const base = `loots.${lootIndex}.rewards`;
+    const rows = rewards.map((reward, j) => `<tr>
+        <td>${textInput(`${base}.${j}.item`, { list: 'dl-items', max: 64, placeholder: 'アイテム名' })}</td>
+        <td class="center">${checkbox(`${base}.${j}.guaranteed`, '確定', true)}</td>
+        <td>${numberInput(`${base}.${j}.chance`, { max: 100, step: 0.1, disabled: reward.guaranteed })}</td>
+        <td>${numberInput(`${base}.${j}.min`, { min: 1 })}</td>
+        <td>${numberInput(`${base}.${j}.max`, { min: 1 })}</td>
+        <td class="center"><button class="btn small danger" data-act="reward-remove" data-arg="${lootIndex}.${j}">削除</button></td>
+    </tr>`).join('');
+    return `<div class="reward-box">
+        ${rows ? `<table class="table">
+            <thead><tr><th>アイテム</th><th>確定</th><th>確率 (%)</th><th>最小数</th><th>最大数</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>` : '<div class="reward-empty">報酬がありません。1つ以上追加してください。</div>'}
+        <button class="btn small" data-act="reward-add" data-arg="${lootIndex}">＋ 報酬を追加</button>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Minigame picker (one tab per group, so the long list stays readable)
+// ---------------------------------------------------------------------------
+function minigameById(id) {
+    return arr(Creator.meta.minigames).find((game) => game.id === id);
+}
+
+function minigameButton(stageIndex) {
+    const game = minigameById(Creator.draft.stages[stageIndex].minigame);
+    const group = game && arr(Creator.meta.minigameGroups).find((entry) => entry.id === game.group);
+    return `<button class="picker-button" data-act="picker-open" data-arg="${stageIndex}">
+        <span>${esc(game ? game.label : '未選択')}</span>
+        <small>${esc(group ? group.label : '')}　変更 ▸</small>
+    </button>`;
+}
+
+function renderPicker() {
+    const root = $('#creator-picker');
+    if (!Creator.picker) {
+        root.classList.add('hidden');
+        root.innerHTML = '';
+        return;
+    }
+    const groups = arr(Creator.meta.minigameGroups);
+    const current = Creator.draft.stages[Creator.picker.stage].minigame;
+    const active = groups.find((group) => group.id === Creator.picker.group) || groups[0];
+    const games = arr(Creator.meta.minigames).filter((game) => game.group === active.id);
+
+    root.classList.remove('hidden');
+    root.innerHTML = `<div class="picker">
+        <div class="picker-head">
+            <div class="main-title">ミニゲームを選択 <span class="mute">ステージ ${Creator.picker.stage + 1}</span></div>
+            <button class="btn icon" data-act="picker-close">✕</button>
+        </div>
+        <nav class="tabs">${groups.map((group) => {
+            const count = arr(Creator.meta.minigames).filter((game) => game.group === group.id).length;
+            return `<button class="tab${group.id === active.id ? ' active' : ''}${group.available ? '' : ' off'}" data-act="picker-tab" data-arg="${group.id}">${esc(group.label)}<span class="tab-count">${count}</span></button>`;
+        }).join('')}</nav>
+        ${active.available ? '' : `<div class="hint-box warn">リソース「${esc(active.resource)}」が起動していません。起動するとこのタブのミニゲームを使用できます。</div>`}
+        <div class="picker-grid">${games.map((game) => `
+            <button class="picker-card${game.id === current ? ' active' : ''}" data-act="picker-select" data-arg="${esc(game.id)}"${active.available ? '' : ' disabled'}>
+                <span class="picker-name">${esc(game.label)}</span>
+                <span class="picker-desc">${esc(game.desc)}</span>
+            </button>`).join('')}</div>
+    </div>`;
+}
 
 // ---------------------------------------------------------------------------
 // Rendering
@@ -294,9 +351,11 @@ function renderCreator() {
         $('#creator-actions').innerHTML = `
             ${d.id ? `<button class="btn danger" data-act="delete-heist">${Creator.confirmDelete ? '本当に削除する' : '削除'}</button>` : ''}
             <button class="btn primary" data-act="save-heist">保存</button>`;
+        if (!TAB_RENDERERS[Creator.tab]) Creator.tab = 'basic';
         content.innerHTML = TAB_RENDERERS[Creator.tab]();
     }
     content.scrollTop = scroll;
+    renderPicker();
 }
 
 function fillDatalists() {
@@ -318,7 +377,7 @@ async function addEntry(kind) {
     }
 
     if (kind === 'stages') {
-        const first = arr(Creator.meta.minigames)[0];
+        const first = arr(Creator.meta.minigames).find((game) => game.group === 'basic') || arr(Creator.meta.minigames)[0];
         d.stages.push({
             label: '', coords: await post('creator:getPosition'), interaction: 'key', item: '', itemCount: 1,
             consume: false, minigame: first ? first.id : '', difficulty: 'medium', doors: [],
@@ -331,9 +390,7 @@ async function addEntry(kind) {
             coords: await post('creator:getPosition'),
         });
     } else if (kind === 'loots') {
-        d.loots.push({ label: '', coords: await post('creator:getPosition'), interaction: 'key', duration: 8 });
-    } else if (kind === 'rewards') {
-        d.rewards.push({ item: '', guaranteed: false, chance: 50, min: 1, max: 1 });
+        d.loots.push({ label: '', coords: await post('creator:getPosition'), interaction: 'key', duration: 8, rewards: [] });
     }
     renderCreator();
     const content = $('#creator-content');
@@ -440,6 +497,41 @@ const CREATOR_ACTIONS = {
         const coords = getPath(Creator.draft, arg);
         if (coords) post('creator:teleport', coords);
     },
+    'reward-add'(arg) {
+        const loot = Creator.draft.loots[Number(arg)];
+        const limit = (Creator.meta.limits || {}).rewards;
+        loot.rewards = arr(loot.rewards);
+        if (limit && loot.rewards.length >= limit) {
+            toast('creator-toast', `これ以上追加できません (最大 ${limit})`, 'error');
+            return;
+        }
+        loot.rewards.push({ item: '', guaranteed: false, chance: 50, min: 1, max: 1 });
+        renderCreator();
+    },
+    'reward-remove'(arg) {
+        const [loot, index] = arg.split('.').map(Number);
+        Creator.draft.loots[loot].rewards.splice(index, 1);
+        renderCreator();
+    },
+    'picker-open'(arg) {
+        const stage = Number(arg);
+        const game = minigameById(Creator.draft.stages[stage].minigame);
+        Creator.picker = { stage, group: game ? game.group : null };
+        renderPicker();
+    },
+    'picker-close'() {
+        Creator.picker = null;
+        renderPicker();
+    },
+    'picker-tab'(arg) {
+        Creator.picker.group = arg;
+        renderPicker();
+    },
+    'picker-select'(arg) {
+        Creator.draft.stages[Creator.picker.stage].minigame = arg;
+        Creator.picker = null;
+        renderCreator();
+    },
     'door-remove'(arg) {
         const [stage, id] = arg.split('.').map(Number);
         const stageData = Creator.draft.stages[stage];
@@ -537,4 +629,8 @@ on('creator:open', (data) => {
 
 on('creator:hide', () => $('#creator').classList.add('hidden'));
 on('creator:show', () => $('#creator').classList.remove('hidden'));
-on('creator:close', () => showPage('creator', false));
+on('creator:close', () => {
+    Creator.picker = null;
+    renderPicker();
+    showPage('creator', false);
+});

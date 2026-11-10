@@ -6,7 +6,7 @@ local function removeAll()
         local npc = npcs[i]
         npc.point:remove()
         if npc.ped and DoesEntityExist(npc.ped) then
-            exports.ox_target:removeLocalEntity(npc.ped, 'heist_creator:hud')
+            exports.ox_target:removeLocalEntity(npc.ped, { 'heist_creator:hud', 'heist_creator:finish' })
             DeleteEntity(npc.ped)
         end
         if npc.blip and DoesBlipExist(npc.blip) then RemoveBlip(npc.blip) end
@@ -39,6 +39,14 @@ local function spawnPed(npc, data)
             distance = Config.Npc.targetDistance,
             onSelect = function() OpenHeistHud() end,
         },
+        {
+            name = 'heist_creator:finish',
+            icon = 'fa-solid fa-flag-checkered',
+            label = L('extract_label'),
+            distance = Config.Npc.targetDistance,
+            canInteract = function() return CanFinishHeistAt(data.x, data.y) end,
+            onSelect = function() FinishHeist() end,
+        },
     })
     npc.ped = ped
 end
@@ -61,7 +69,7 @@ local function setNpcs(list)
 
         function npc.point:onExit()
             if npc.ped then
-                exports.ox_target:removeLocalEntity(npc.ped, 'heist_creator:hud')
+                exports.ox_target:removeLocalEntity(npc.ped, { 'heist_creator:hud', 'heist_creator:finish' })
                 if DoesEntityExist(npc.ped) then DeleteEntity(npc.ped) end
                 npc.ped = nil
             end

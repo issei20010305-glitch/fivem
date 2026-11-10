@@ -164,7 +164,7 @@ function renderDetail() {
         ${itemImage(reward.item)}
         <span class="reward-name">${esc(reward.label)}</span>
         <span class="reward-amount">×${reward.min === reward.max ? reward.min.toLocaleString() : `${reward.min.toLocaleString()}〜${reward.max.toLocaleString()}`}</span>
-        <span class="reward-chance${reward.guaranteed ? ' sure' : ''}">${reward.guaranteed ? '確定' : `${reward.chance}%`}</span>
+        <span class="reward-chance${reward.guaranteed ? ' sure' : ''}">${reward.guaranteed ? '確定' : `最大${reward.chance}%`}</span>
     </div>`).join('');
 
     panel.innerHTML = `
@@ -190,7 +190,7 @@ function renderDetail() {
             ${requirement(globalLeft <= 0, 'サーバー全体クールダウン', globalLeft > 0 ? `残り <span data-cd="global">${formatTime(globalLeft)}</span>` : `利用可能 (${heist.globalCooldown}分)`)}
             ${requirement(playerLeft <= 0, '個人クールダウン', playerLeft > 0 ? `残り <span data-cd="player">${formatTime(playerLeft)}</span>` : `利用可能 (${heist.playerCooldown}分)`)}
 
-            <div class="section-title">期待できる報酬 <span class="mute">(物色ポイントごとに抽選)</span></div>
+            <div class="section-title">期待できる報酬 <span class="mute">(物色ポイントにより異なります)</span></div>
             ${rewards || '<div class="mute small-text">アイテム報酬はありません。</div>'}
 
             <div class="section-title">パーティーXPボーナス</div>

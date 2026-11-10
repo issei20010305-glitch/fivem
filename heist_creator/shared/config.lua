@@ -92,8 +92,8 @@ Config.XP = {
     },
     -- false: only the party leader needs the required XP / true: every member needs it
     requireAllMembers = false,
-    -- Members further away than this from the extraction point when the heist is
-    -- completed do not count as participants (no XP). 0 = no distance check.
+    -- Members further away than this from the heist NPC when the heist is handed
+    -- in do not count as participants (no XP). 0 = no distance check.
     participationDistance = 150.0,
     -- Rank titles shown in the Heist HUD (display only).
     ranks = {
@@ -185,7 +185,7 @@ Config.Guidance = {
         start      = { sprite = 486, colour = 46, scale = 0.9 },
         stage      = { sprite = 521, colour = 5,  scale = 0.9 },
         loot       = { sprite = 587, colour = 2,  scale = 0.7 },
-        extraction = { sprite = 358, colour = 3,  scale = 0.9 },
+        finish     = { sprite = 280, colour = 2,  scale = 0.9 }, -- the heist NPC you return to
     },
 }
 
@@ -225,9 +225,9 @@ Config.Limits = {
 
 ---------------------------------------------------------------------------
 -- Minigames
--- Each entry: label (shown in the creator) + run(difficulty) executed on the
+-- Each entry: label + desc (shown in the creator), group (tab in the picker),
+-- optional resource (must be started) and run(difficulty), executed on the
 -- client. run must return true on success. difficulty is 'easy' | 'medium' | 'hard'.
--- To add your own minigame simply add an entry that calls its export.
 ---------------------------------------------------------------------------
 Config.MinigameDifficulties = {
     { id = 'easy',   label = '簡単' },
@@ -235,9 +235,25 @@ Config.MinigameDifficulties = {
     { id = 'hard',   label = '難しい' },
 }
 
+-- Tabs of the minigame picker. A tab whose resource is not running is greyed out.
+Config.MinigameGroups = {
+    { id = 'basic',        label = '標準' },
+    { id = 'psui',         label = 'ps-ui',           resource = 'ps-ui' },
+    { id = 'aw_reaction',  label = 'Awoken 反応',     resource = 'awoken_minigames' },
+    { id = 'aw_memory',    label = 'Awoken 記憶',     resource = 'awoken_minigames' },
+    { id = 'aw_logic',     label = 'Awoken パズル',   resource = 'awoken_minigames' },
+    { id = 'aw_input',     label = 'Awoken 入力',     resource = 'awoken_minigames' },
+    { id = 'aw_precision', label = 'Awoken 精密操作', resource = 'awoken_minigames' },
+    { id = 'aw_dexterity', label = 'Awoken 器用さ',   resource = 'awoken_minigames' },
+    { id = 'aw_arcade',    label = 'Awoken アーケード', resource = 'awoken_minigames' },
+}
+
 Config.Minigames = {
     skillcheck = {
-        label = 'スキルチェック (ox_lib)',
+        label = 'スキルチェック',
+        desc = '回る針をタイミングよく止める (ox_lib)',
+        group = 'basic',
+        order = 1,
         run = function(difficulty)
             local presets = {
                 easy   = { 'easy', 'easy', 'easy' },
@@ -248,19 +264,28 @@ Config.Minigames = {
         end,
     },
     pattern = {
-        label = 'パターン記憶 (Heist HUD)',
+        label = 'パターン記憶',
+        desc = '光ったマスを覚えてクリックする',
+        group = 'basic',
+        order = 2,
         run = function(difficulty)
             return StartNuiMinigame('pattern', difficulty)
         end,
     },
     sequence = {
-        label = 'ナンバーシーケンス (Heist HUD)',
+        label = '数字順クリック',
+        desc = '1 から順番に数字をクリックする',
+        group = 'basic',
+        order = 3,
         run = function(difficulty)
             return StartNuiMinigame('sequence', difficulty)
         end,
     },
     progress = {
-        label = 'なし (プログレスバーのみ)',
+        label = 'ミニゲームなし',
+        desc = 'プログレスバーを待つだけ',
+        group = 'basic',
+        order = 4,
         run = function(difficulty)
             local duration = { easy = 5000, medium = 8000, hard = 12000 }
             return lib.progressCircle({
@@ -273,14 +298,162 @@ Config.Minigames = {
             })
         end,
     },
-    -- Example of an external minigame:
-    -- howdy_hack = {
-    --     label = 'Howdy Hack',
-    --     run = function(difficulty)
-    --         return exports['howdy-hackminigame']:Begin(3, 5000)
-    --     end,
-    -- },
 }
+
+---------------------------------------------------------------------------
+-- ps-ui (https://github.com/Project-Sloth/ps-ui)
+-- args: values passed to the export after the callback, per difficulty.
+---------------------------------------------------------------------------
+local psui = {
+    { id = 'ps_circle', export = 'Circle', label = 'サークル', desc = '回る線が的に重なった瞬間にキーを押す',
+        args = { easy = { 2, 20 }, medium = { 3, 15 }, hard = { 5, 10 } } },           -- circles, seconds
+    { id = 'ps_thermite', export = 'Thermite', label = 'テルミット (マス記憶)', desc = '光ったマスの位置を覚えてクリックする',
+        args = { easy = { 15, 6, 4 }, medium = { 12, 7, 3 }, hard = { 10, 8, 2 } } },  -- seconds, grid, mistakes
+    { id = 'ps_maze', export = 'Maze', label = 'ナンバーメイズ', desc = '数字をたどって正しい道順を見つける',
+        args = { easy = { 25 }, medium = { 18 }, hard = { 12 } } },                    -- seconds
+    { id = 'ps_varhack', export = 'VarHack', label = 'VARハック', desc = 'ブロックの番号を覚えて順番にクリックする',
+        args = { easy = { 3, 20 }, medium = { 5, 15 }, hard = { 7, 12 } } },           -- blocks, seconds
+    { id = 'ps_scrambler', export = 'Scrambler', label = 'スクランブラー', desc = '記号の組み合わせを覚えて答える',
+        args = { easy = { 'numeric', 30, 0 }, medium = { 'alphabet', 25, 0 }, hard = { 'alphanumeric', 20, 1 } } }, -- type, seconds, mirrored
+}
+
+for i = 1, #psui do
+    local game = psui[i]
+    Config.Minigames[game.id] = {
+        label = game.label,
+        desc = game.desc,
+        group = 'psui',
+        resource = 'ps-ui',
+        run = function(difficulty)
+            return RunPsUi(game.export, game.args[difficulty] or game.args.medium)
+        end,
+    }
+end
+
+---------------------------------------------------------------------------
+-- Awoken Minigames (awoken_minigames)
+-- Every game uses the settings from awoken_minigames/config/games/*.lua.
+-- The stage difficulty decides how many times in a row it has to be cleared
+-- (Config.Awoken.rounds). Extra options per game and difficulty can be added
+-- in Config.Awoken.options, e.g.
+--   options = { skillCheck = { hard = { speed = 90, zoneSize = 12 } } }
+---------------------------------------------------------------------------
+Config.Awoken = {
+    rounds  = { easy = 1, medium = 2, hard = 3 },
+    options = {},
+    -- Ask awoken_minigames on the SERVER whether the player really won before a
+    -- stage counts as completed. Turn off if stages are wrongly rejected.
+    serverVerify = true,
+}
+
+-- { game key in awoken_minigames, name shown in the creator, short explanation }
+local awoken = {
+    aw_reaction = {
+        { 'skillCheck',    'タイミングバー',       '動くマーカーをゾーンの中で止める' },
+        { 'circleClick',   'サークルタイミング',   '回る針が的に重なった瞬間にキーを押す' },
+        { 'holdZone',      '長押しリリース',       'キーを長押しして、帯の中で離す' },
+        { 'aimTest',       'ターゲット射撃',       '現れる的をすばやくクリックする' },
+        { 'balance',       'バランス',             'Q / E で針を中央に保ち続ける' },
+        { 'rhythm',        'リズムゲーム',         '落ちてくるノーツに合わせてキーを押す' },
+        { 'firewallPulse', 'ファイアウォール突破', '安全ゾーンに入った瞬間に押す' },
+        { 'safeCrack',     '金庫ダイヤル',         'ダイヤルを回して暗証番号を探す' },
+        { 'lockpick',      'ピッキング',           'リングを回して位置を揃える' },
+        { 'osu',           'ビートクリック',       'リズムに合わせて円をクリックする' },
+        { 'slider',        'スライダー',           '流れてくる中から正しいものを止める' },
+    },
+    aw_memory = {
+        { 'simonSays',        '光る順番',     '光ったマスの順番を覚えて繰り返す' },
+        { 'memory',           'マス記憶',     '光ったマスの配置を覚えて再現する' },
+        { 'memoryColors',     '色の記憶',     '色の数を覚えて答える' },
+        { 'verbalMemory',     '単語の記憶',   '前に見た単語かどうかを答える' },
+        { 'numberedSequence', '番号記憶',     '番号の位置を覚えて順番にクリックする' },
+        { 'varHack',          'VARハック',    '動くブロックの番号を覚えて順番にクリックする' },
+        { 'pairs',            '神経衰弱',     '同じ絵柄のペアをすべて揃える' },
+        { 'recall',           '道順の記憶',   '示された道順を覚えてなぞる' },
+        { 'observe',          '観察テスト',   '場面を観察して質問に答える' },
+        { 'tally',            '色カウント',   '色付きのマスの数を数える' },
+        { 'chromaLock',       'カラーロック', '記憶を頼りに同じ色を作る' },
+        { 'pitchLock',        '音合わせ',     '耳で聞いて音の高さを合わせる' },
+    },
+    aw_logic = {
+        { 'hexBreach',    'コード行列ハック',   '行列から正しい順番にコードを選ぶ' },
+        { 'codeCrack',    '暗証コード推理',     'ヒントをもとに隠されたコードを当てる' },
+        { 'fingerprint',  '指紋照合',           '指紋のパーツを回して揃える' },
+        { 'wires',        '配線つなぎ',         '同じ端子どうしを線でつなぐ' },
+        { 'splice',       '配線カット',         '故障している箇所だけを切る' },
+        { 'pipePressure', '配管パズル',         'パイプを回して水路をつなぐ' },
+        { 'current',      '電流バランス',       '負荷が均等になるよう調整する' },
+        { 'dataStream',   'データ傍受と解読',   'パケットを捕まえて暗号を解く' },
+        { 'symbolSearch', '記号探し',           '指定された記号の並びを探す' },
+        { 'lightsOut',    'ライツアウト',       'すべてのマスを点灯させる' },
+        { 'untangle',     '線ほどき',           '線が交差しないように点を動かす' },
+        { 'arrowMaze',    '見えない迷路',       '見えない道を矢印キーで進む' },
+        { 'minefield',    'マインスイーパー',   '地雷を避けてマスを開ける' },
+        { 'jigsaw',       'ジグソーパズル',     'タイルを入れ替えて絵を完成させる' },
+        { 'towerOfHanoi', 'ハノイの塔',         '円盤を1枚ずつ動かして移し替える' },
+        { 'mathRush',     '数の大小くらべ',     'どちらが大きいかをすばやく答える' },
+        { 'twenty48',     '2048',               '数字を合体させて目標の数を作る' },
+        { 'collapse',     'ブロック消し',       '盤面のブロックをすべて消す' },
+        { 'wordCrack',    '英単語当て',         '隠された英単語を推理する (英語)' },
+    },
+    aw_input = {
+        { 'keymash',          '連打',         'キーを連打してゲージをためる' },
+        { 'keys',             'タイピング',   '表示された文字をそのまま入力する' },
+        { 'numberUp',         '数字順クリック', '数字を小さい順にクリックする' },
+        { 'backdoorSequence', 'コマンド入力', '表示された順番どおりにキーを押す' },
+    },
+    aw_precision = {
+        { 'track',     'ターゲット追尾', 'カーソルを動く的に合わせ続ける' },
+        { 'trace',     '線なぞり',       '線からはみ出さないようになぞる' },
+        { 'cut',       'カッティング',   'ガイドに沿って刃を動かす' },
+        { 'calibrate', 'ダイヤル調整',   'それぞれのダイヤルを最適な位置に合わせる' },
+        { 'waveform',  '波形合わせ',     '波形を目標と同じ形に合わせる' },
+        { 'thread',    'すき間くぐり',   '動くすき間をぶつからずに通り抜ける' },
+        { 'reach',     '道さがし',       '通り抜けられる道を見つける' },
+    },
+    aw_dexterity = {
+        { 'shake',    'マウスシェイク', 'マウスを振ってゲージを満たす' },
+        { 'cascade',  '落下タイピング', '落ちてくる文字を入力する' },
+        { 'fishing',  'フィッシング',   'カーソルを魚に合わせ続ける' },
+        { 'cooldown', '冷却作業',       '熱くなったマスをなぞって冷やす' },
+    },
+    aw_arcade = {
+        { 'snake',      'スネーク',       'ぶつからずにヘビを伸ばす' },
+        { 'flappy',     'フラッピー',     'すき間を飛び抜ける' },
+        { 'stack',      'タワー積み',     'タイミングよく落として積み上げる' },
+        { 'pong',       'ポン',           'AI より先に目標点を取る' },
+        { 'invaders',   'インベーダー',   '敵をすべて撃ち落とす' },
+        { 'crossy',     '道路横断',       '車を避けて上まで渡りきる' },
+        { 'ascent',     'ジャンプ登り',   '足場を跳ねて頂上を目指す' },
+        { 'slipstream', '車線変更',       '車線を切り替えて車を避ける' },
+        { 'stickIt',    'ピン刺し',       '回る的に、他のピンに当てずに刺す' },
+        { 'breakout',   'ブロック崩し',   'ボールを打ち返して壁を壊す' },
+        { 'matchIt',    '面合わせ',       '正しい面をタイルに向ける' },
+    },
+}
+
+for group, games in pairs(awoken) do
+    for i = 1, #games do
+        local key, label, desc = games[i][1], games[i][2], games[i][3]
+        Config.Minigames[('aw_%s'):format(key)] = {
+            label = label,
+            desc = desc,
+            group = group,
+            order = i,
+            resource = 'awoken_minigames',
+            awoken = key,
+            run = function(difficulty)
+                return RunAwoken(key, difficulty, label, desc)
+            end,
+        }
+    end
+end
+
+-- Your own minigame: one entry is enough.
+-- Config.Minigames.my_hack = {
+--     label = 'マイハック', desc = '説明', group = 'basic', resource = 'my_hack',
+--     run = function(difficulty) return exports['my_hack']:Start() end,
+-- }
 
 -- Settings of the built-in Heist HUD minigames.
 Config.NuiMinigames = {

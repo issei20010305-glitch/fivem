@@ -220,6 +220,28 @@ select option { background: #10131a; }
 }
 .coords-value.unset { color: var(--red); font-family: inherit; }
 
+.reward-box { padding: 0.7rem; background: #10131a; border: 1px solid var(--line); border-radius: 0.5rem; }
+.reward-box .table { margin-bottom: 0.6rem; }
+.reward-box input[type="text"], .reward-box input[type="number"] { background: var(--panel); }
+.reward-empty { font-size: 0.8rem; color: var(--red); margin-bottom: 0.6rem; }
+.hint-box.warn { border-left-color: var(--red); color: var(--red); margin: 0.9rem 1.3rem 0; }
+.hint-box + .hint-box { margin-top: -0.4rem; }
+
+.picker-button { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; font: inherit; font-size: 0.86rem; font-weight: 600; color: var(--text); text-align: left; background: #10131a; border: 1px solid var(--line); border-radius: 0.45rem; padding: 0.5rem 0.65rem; cursor: pointer; }
+.picker-button:hover { border-color: var(--accent); }
+.picker-button small { font-size: 0.72rem; font-weight: 400; color: var(--mute); white-space: nowrap; }
+.picker-layer { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5, 6, 10, 0.6); z-index: 10; }
+.picker { display: flex; flex-direction: column; width: 62rem; max-width: 92vw; height: 70vh; background: var(--bg); border: 1px solid var(--line); border-radius: 0.9rem; box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.6); overflow: hidden; animation: pop 0.15s ease-out; }
+.picker-head { display: flex; align-items: center; padding: 1rem 1.3rem 0.6rem; }
+.picker .tab.off { opacity: 0.45; }
+.picker-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.6rem; align-content: start; padding: 1.1rem 1.3rem 1.4rem; }
+.picker-card { display: flex; flex-direction: column; gap: 0.2rem; font: inherit; text-align: left; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 0.55rem; padding: 0.75rem 0.85rem; cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
+.picker-card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.picker-card.active { border-color: var(--accent); background: rgba(245, 185, 66, 0.1); }
+.picker-card:disabled { opacity: 0.4; cursor: not-allowed; }
+.picker-name { font-size: 0.92rem; font-weight: 700; }
+.picker-desc { font-size: 0.74rem; color: var(--mute); }
+
 .doors { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .doors select { width: auto; flex: 1; min-width: 14rem; }
 .door-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.35rem 0.3rem 0.7rem; font-size: 0.8rem; background: rgba(245, 185, 66, 0.1); border: 1px solid var(--accent); border-radius: 2rem; }

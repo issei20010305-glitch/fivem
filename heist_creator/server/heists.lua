@@ -67,6 +67,21 @@ local function difficultyExists(id)
     return false
 end
 
+local function cleanReward(raw, limits)
+    if type(raw) ~= 'table' then return nil, L('invalid_data') end
+    local reward = {
+        item       = cleanString(raw.item, 64, ''),
+        guaranteed = raw.guaranteed == true,
+        chance     = Utils.Round(cleanNumber(raw.chance, 0, 100, 0), 2),
+        min        = cleanNumber(raw.min, 1, limits.rewardAmount, 1, true),
+        max        = cleanNumber(raw.max, 1, limits.rewardAmount, 1, true),
+    }
+    if not Framework.ItemExists(reward.item) then return nil, L('err_item', reward.item) end
+    if reward.max < reward.min then reward.max = reward.min end
+    if reward.guaranteed then reward.chance = 100 end
+    return reward
+end
+
 ---Validates everything an admin sends from the creator.
 ---@param input table
 ---@return table? heist, string? error
@@ -89,16 +104,13 @@ function Heists.Sanitize(input)
         timeLimit      = cleanNumber(input.timeLimit, 0, 600, 0, true),
         startRadius    = cleanNumber(input.startRadius, 3, 100, 15),
         start          = cleanCoords(input.start),
-        extraction     = cleanCoords(input.extraction),
         stages         = {},
         guards         = {},
         loots          = {},
-        rewards        = {},
     }
 
     if heist.name == '' then return nil, L('err_name') end
     if not heist.start then return nil, L('err_start') end
-    if not heist.extraction then return nil, L('err_extraction') end
     if heist.maxPlayers < heist.minPlayers then heist.maxPlayers = heist.minPlayers end
 
     -- Stages
@@ -152,7 +164,7 @@ function Heists.Sanitize(input)
         end
     end
 
-    -- Loot points
+    -- Loot points, each with its own loot table
     if type(input.loots) == 'table' then
         if #input.loots > limits.loots then return nil, L('err_too_many', L('word_loots'), limits.loots) end
         for i = 1, #input.loots do
@@ -163,33 +175,21 @@ function Heists.Sanitize(input)
                 coords      = cleanCoords(raw.coords),
                 interaction = INTERACTIONS[raw.interaction] and raw.interaction or 'key',
                 duration    = cleanNumber(raw.duration, 1, 120, 8, true),
+                rewards     = {},
             }
             if not loot.coords then return nil, L('err_loot_coords', i) end
+
+            local rewards = type(raw.rewards) == 'table' and raw.rewards or {}
+            if #rewards < 1 then return nil, L('err_rewards', i) end
+            if #rewards > limits.rewards then return nil, L('err_too_many', L('word_rewards'), limits.rewards) end
+            for j = 1, #rewards do
+                local reward, err = cleanReward(rewards[j], limits)
+                if not reward then return nil, err end
+                loot.rewards[j] = reward
+            end
             heist.loots[i] = loot
         end
     end
-
-    -- Loot table
-    if type(input.rewards) == 'table' then
-        if #input.rewards > limits.rewards then return nil, L('err_too_many', L('word_rewards'), limits.rewards) end
-        for i = 1, #input.rewards do
-            local raw = input.rewards[i]
-            if type(raw) ~= 'table' then return nil, L('invalid_data') end
-            local reward = {
-                item       = cleanString(raw.item, 64, ''),
-                guaranteed = raw.guaranteed == true,
-                chance     = Utils.Round(cleanNumber(raw.chance, 0, 100, 0), 2),
-                min        = cleanNumber(raw.min, 1, limits.rewardAmount, 1, true),
-                max        = cleanNumber(raw.max, 1, limits.rewardAmount, 1, true),
-            }
-            if not Framework.ItemExists(reward.item) then return nil, L('err_item', reward.item) end
-            if reward.max < reward.min then reward.max = reward.min end
-            if reward.guaranteed then reward.chance = 100 end
-            heist.rewards[i] = reward
-        end
-    end
-
-    if #heist.loots > 0 and #heist.rewards == 0 then return nil, L('err_rewards') end
 
     return heist
 end
@@ -208,7 +208,16 @@ function Heists.Load()
             data.stages = data.stages or {}
             data.guards = data.guards or {}
             data.loots = data.loots or {}
-            data.rewards = data.rewards or {}
+            -- Heists saved before loot tables became per loot point: every
+            -- point inherits the old heist-wide table.
+            local legacy = data.rewards
+            data.rewards = nil
+            for _, loot in ipairs(data.loots) do
+                loot.rewards = loot.rewards or legacy or {}
+            end
+            for _, stage in ipairs(data.stages) do
+                stage.doors = stage.doors or {}
+            end
             Heists.list[row.id] = data
         else
             print(('[Heist Creator] heist #%s has corrupted data and was skipped'):format(row.id))
@@ -278,17 +287,35 @@ end
 ---@param citizenid string
 ---@param xp number
 function Heists.Public(heist, citizenid, xp)
-    local rewards = {}
-    for i = 1, #heist.rewards do
-        local reward = heist.rewards[i]
-        rewards[i] = {
-            item = reward.item,
-            label = Framework.ItemLabel(reward.item),
-            chance = reward.chance,
-            min = reward.min,
-            max = reward.max,
-            guaranteed = reward.guaranteed,
-        }
+    -- Expected rewards: one line per item, summarised over every loot point.
+    local rewards, byItem = {}, {}
+    for _, loot in ipairs(heist.loots) do
+        for _, reward in ipairs(loot.rewards or {}) do
+            local entry = byItem[reward.item]
+            if not entry then
+                entry = {
+                    item = reward.item,
+                    label = Framework.ItemLabel(reward.item),
+                    chance = 0,
+                    min = reward.min,
+                    max = reward.max,
+                    guaranteed = false,
+                    points = {},
+                }
+                byItem[reward.item] = entry
+                rewards[#rewards + 1] = entry
+            end
+            entry.min = math.min(entry.min, reward.min)
+            entry.max = math.max(entry.max, reward.max)
+            entry.chance = math.max(entry.chance, reward.chance)
+            entry.guaranteed = entry.guaranteed or reward.guaranteed
+            entry.points[loot] = true
+        end
+    end
+    for i = 1, #rewards do
+        local count = 0
+        for _ in pairs(rewards[i].points) do count = count + 1 end
+        rewards[i].points = count
     end
 
     return {

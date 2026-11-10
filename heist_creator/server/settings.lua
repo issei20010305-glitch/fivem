@@ -46,17 +46,21 @@ function Settings.SaveNpcs(list)
     return true
 end
 
+---The heist NPC a player is standing next to (the closest one within range).
 ---@param src number
 ---@param distance number
-function Settings.IsNearNpc(src, distance)
+---@return { x: number, y: number, z: number }? npc
+function Settings.NearestNpc(src, distance)
     local ped = GetPlayerPed(src)
-    if not ped or ped == 0 then return false end
+    if not ped or ped == 0 then return nil end
     local coords = GetEntityCoords(ped)
+    local best, bestDistance
     for i = 1, #Settings.npcs do
         local npc = Settings.npcs[i]
-        if #(coords - vector3(npc.x, npc.y, npc.z)) <= distance then
-            return true
+        local dist = #(coords - vector3(npc.x, npc.y, npc.z))
+        if dist <= distance and (not bestDistance or dist < bestDistance) then
+            best, bestDistance = npc, dist
         end
     end
-    return false
+    return best and { x = best.x, y = best.y, z = best.z } or nil
 end

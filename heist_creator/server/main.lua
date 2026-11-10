@@ -163,15 +163,34 @@ end)
 -- Creator (admin only, checked on every request)
 ---------------------------------------------------------------------------
 local function creatorMeta()
+    local groups, available = {}, {}
+    for i = 1, #Config.MinigameGroups do
+        local group = Config.MinigameGroups[i]
+        available[group.id] = not group.resource or GetResourceState(group.resource) == 'started'
+        groups[i] = { id = group.id, label = group.label, resource = group.resource, available = available[group.id] }
+    end
+
     local minigames = {}
     for id, minigame in pairs(Config.Minigames) do
-        minigames[#minigames + 1] = { id = id, label = minigame.label or id }
+        local group = available[minigame.group] ~= nil and minigame.group or 'basic'
+        minigames[#minigames + 1] = {
+            id = id,
+            label = minigame.label or id,
+            desc = minigame.desc or '',
+            group = group,
+            order = minigame.order or 0,
+            available = not minigame.resource or GetResourceState(minigame.resource) == 'started',
+        }
     end
-    table.sort(minigames, function(a, b) return a.id < b.id end)
+    table.sort(minigames, function(a, b)
+        if a.order ~= b.order then return a.order < b.order end
+        return a.id < b.id
+    end)
 
     return {
         items = Framework.GetItemList(),
         minigames = minigames,
+        minigameGroups = groups,
         difficulties = Config.MinigameDifficulties,
         behaviors = Config.Guards.behaviors,
         models = Config.Guards.models,

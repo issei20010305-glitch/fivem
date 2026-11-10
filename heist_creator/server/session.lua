@@ -64,6 +64,7 @@ local function snapshot(session)
         guards = guards,
         members = members,
         leader = session.party.leader,
+        npc = session.npc,
         timeLeft = timeLeft,
     }
 end
@@ -102,7 +103,8 @@ function Sessions.Start(src, heistId)
     if party.leader ~= src then return false, L('party_not_leader') end
     if party.session then return false, L('already_in_heist') end
     if Sessions.byHeist[heistId] then return false, L('heist_in_progress') end
-    if not Settings.IsNearNpc(src, Config.Start.npcDistance) then return false, L('too_far_npc') end
+    local npc = Settings.NearestNpc(src, Config.Start.npcDistance)
+    if not npc then return false, L('too_far_npc') end
 
     local size = #party.members
     if size < heist.minPlayers then return false, L('need_players', heist.minPlayers) end
@@ -138,6 +140,7 @@ function Sessions.Start(src, heistId)
     local session = {
         id = nextId,
         heist = heist,
+        npc = npc, -- the heist is handed in at the NPC it was started from
         party = party,
         members = {},
         identifiers = identifiers, -- [src] = citizenid, kept for cooldowns after a disconnect
@@ -286,12 +289,12 @@ local function complete(session, src)
     local heist = session.heist
     session.phase = 'completing' -- blocks every further request immediately
 
-    local extraction = heist.extraction
+    local finish = session.npc
     local participants = {}
     for i = 1, #session.members do
         local member = session.members[i]
         if member == src or Config.XP.participationDistance <= 0
-            or isNear(member, extraction, Config.XP.participationDistance) then
+            or isNear(member, finish, Config.XP.participationDistance) then
             participants[#participants + 1] = member
         end
     end
@@ -369,6 +372,20 @@ function Sessions.FinishStage(src, index, success)
     end
     if not isNear(src, stage.coords, Config.Security.interactDistance) then return false, L('too_far') end
 
+    -- Awoken Minigames can confirm on the server that the player really won.
+    local minigame = Config.Minigames[stage.minigame]
+    if minigame and minigame.awoken and Config.Awoken.serverVerify
+        and GetResourceState('awoken_minigames') == 'started' then
+        local ok, verified = pcall(function()
+            return exports.awoken_minigames:ConsumeResult(src, minigame.awoken)
+        end)
+        if ok and verified ~= true then
+            print(('[Heist Creator] player %s reported a win for "%s" that awoken_minigames did not confirm')
+                :format(src, minigame.awoken))
+            return false, L('stage_unverified')
+        end
+    end
+
     if stage.item ~= '' then
         if Framework.GetItemCount(src, stage.item) < stage.itemCount then
             return false, L('need_item', Framework.ItemLabel(stage.item), stage.itemCount)
@@ -433,8 +450,8 @@ function Sessions.FinishLoot(src, index, completed)
     session.looted[index] = true
 
     local received = {}
-    for i = 1, #heist.rewards do
-        local reward = heist.rewards[i]
+    for i = 1, #loot.rewards do
+        local reward = loot.rewards[i]
         if reward.guaranteed or math.random() * 100 < reward.chance then
             local amount = math.random(reward.min, reward.max)
             local given, dropped = Framework.GiveItem(src, reward.item, amount)
@@ -465,7 +482,7 @@ function Sessions.Extract(src)
     if not session or (session.phase ~= 'loot' and session.phase ~= 'extract') then
         return false, L('invalid_state')
     end
-    if not isNear(src, session.heist.extraction, Config.Security.interactDistance + 4.0) then
+    if not isNear(src, session.npc, Config.Security.interactDistance + 4.0) then
         return false, L('too_far')
     end
     complete(session, src)

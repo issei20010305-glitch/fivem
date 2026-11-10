@@ -28,7 +28,6 @@ Locales = {
     -- Creator validation
     err_name             = 'ヘイスト名を入力してください。',
     err_start            = '開始地点を設定してください。',
-    err_extraction       = '脱出地点を設定してください。',
     err_stages           = 'ステージを1つ以上追加してください。',
     err_too_many         = '%sが多すぎます (最大 %d)。',
     err_stage_coords     = 'ステージ %d の位置が設定されていません。',
@@ -38,7 +37,7 @@ Locales = {
     err_guard_model      = 'ガード %d のモデルまたは武器が無効です。',
     err_guard_coords     = 'ガード %d の位置が設定されていません。',
     err_loot_coords      = '物色ポイント %d の位置が設定されていません。',
-    err_rewards          = '物色ポイントがある場合は報酬を1つ以上設定してください。',
+    err_rewards          = '物色ポイント %d に報酬を1つ以上設定してください。',
     heist_not_found      = 'ヘイストが見つかりません。',
     heist_busy           = 'このヘイストは現在進行中のため変更できません。',
     cooldown_reset       = 'クールダウンをリセットしました。',
@@ -62,7 +61,7 @@ Locales = {
     heist_started        = 'ヘイスト「%s」を開始しました。',
     heist_completed      = 'ヘイスト「%s」成功！ +%d XP',
     heist_completed_bonus = 'ヘイスト「%s」成功！ +%d XP (パーティーボーナス +%d%%)',
-    heist_completed_absent = 'ヘイスト「%s」は成功しましたが、脱出地点にいなかったためXPは獲得できませんでした。',
+    heist_completed_absent = 'ヘイスト「%s」は成功しましたが、受付NPCの近くにいなかったためXPは獲得できませんでした。',
     heist_cancelled      = 'ヘイストは中止されました。',
     heist_timeout        = '時間切れ…ヘイスト失敗。',
     heist_left           = 'ヘイストから離脱しました。',
@@ -73,15 +72,17 @@ Locales = {
     obj_travel           = '開始地点へ向かえ',
     obj_stage            = 'ハッキングデバイスを使ってセキュリティを解除せよ',
     obj_loot             = 'マークされた場所を物色せよ',
-    obj_extract          = '脱出地点で離脱せよ',
+    obj_extract          = '受付NPCのもとへ戻り、ヘイストを完了せよ',
     step_stage           = 'ステージ %d / %d',
     step_loot            = '物色 %d / %d',
     blip_start           = 'ヘイスト開始地点',
-    blip_extraction      = '脱出地点',
+    blip_finish          = 'ヘイストの報告先',
 
     -- Stages
     stage_default_label  = 'セキュリティを解除する',
     stage_in_use         = '他のメンバーが作業中です。',
+    stage_unverified     = 'ミニゲームの成功を確認できませんでした。もう一度試してください。',
+    minigame_missing     = 'ミニゲーム「%s」のリソースが起動していません。管理者に連絡してください。',
     stage_failed         = '失敗した…もう一度試せ。',
     stage_failed_by      = '%s がセキュリティ解除に失敗した。',
     stage_done_by        = '%s がステージ %d / %d を突破した。',
@@ -100,9 +101,9 @@ Locales = {
     loot_done_by         = '%s が物色を完了した (%d / %d)。',
 
     -- Extraction
-    extract_label        = '脱出する',
-    extract_confirm_title = '脱出の確認',
-    extract_confirm_text = 'まだ物色していない場所が %d 箇所残っています。このまま脱出しますか？',
+    extract_label        = 'ヘイストを完了する',
+    extract_confirm_title = '完了の確認',
+    extract_confirm_text = 'まだ物色していない場所が %d 箇所残っています。このままヘイストを完了しますか？',
 
     -- Party
     party_created        = 'パーティーを作成しました。',

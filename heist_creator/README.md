@@ -9,9 +9,12 @@ party and play them together. All in-game text is Japanese.
 - **Admin creator** (`/createheist`): name, description, image, required Heist XP, XP reward,
   start point, any number of hack / minigame stages (Press E or ox_target, optional required
   item, minigame + difficulty per stage), NPC guards (model, weapon, health, armour, accuracy,
-  behaviour), loot points, loot table (chance + min/max amount, guaranteed rewards, several
-  rewards can drop from one loot point), required police, extraction point, server-wide and
-  per-player cooldowns, time limit and party size.
+  behaviour), loot points each with their own loot table (chance + min/max amount, guaranteed
+  rewards, several rewards can drop from one point), required police, server-wide and
+  per-player cooldowns, time limit and party size. The heist is handed in at the NPC it was
+  started from.
+- **Minigames**: built-in ones, ox_lib skill check, ps-ui and all 68 Awoken Minigames, chosen
+  from a picker with one tab per group and Japanese names.
 - **Heist HUD**: available / locked heists, XP requirement, police requirement and current
   police count, cooldowns, difficulty, expected rewards, party members.
 - **Party system**: create a party, invite nearby players or by server ID, shared progress.
@@ -31,6 +34,8 @@ party and play them together. All in-game text is Japanese.
 | [oxmysql](https://github.com/overextended/oxmysql) | database |
 | OneSync | required (server-side position checks, guard cleanup) |
 | [ox_doorlock](https://github.com/CommunityOx/ox_doorlock) | optional – unlock doors when a stage is completed |
+| [ps-ui](https://github.com/Project-Sloth/ps-ui) | optional – 5 extra minigames |
+| awoken_minigames | optional – 68 extra minigames |
 
 ## Installation
 
@@ -68,18 +73,19 @@ party and play them together. All in-game text is Japanese.
 2. Fill the tabs from left to right:
    - **基本情報** – name, description, image URL, difficulty, required XP, XP reward.
    - **参加条件・クールダウン** – required police, party size, time limit, cooldowns.
-   - **開始・脱出地点** – start point (+ radius) and extraction point.
+   - **開始地点** – start point (+ radius). There is no extraction point: the crew returns
+     to the heist NPC to finish.
    - **ステージ** – one card per stage: objective text, position, interaction
-     (Press E / ox_target), minigame, difficulty, optional required item (and whether it is
-     consumed).
+     (Press E / ox_target), minigame (opens the picker), difficulty, optional required item
+     (and whether it is consumed).
    - **ガード** – NPC guards. "複製" copies a guard, then move it with "現在位置".
-   - **物色ポイント** – lootable locations and how long looting takes.
-   - **報酬テーブル** – the loot table. Every row is rolled separately for each loot point.
+   - **物色ポイント** – lootable locations, how long looting takes, and the loot table of
+     that point. Every row is rolled separately. "複製" copies a point with its table.
 3. Positions: **現在位置** uses where you stand, **照準で指定** lets you aim with the camera
    and confirm with `E`, **TP** teleports you to a saved position.
 4. Press **保存**. The heist is stored in the database and is immediately available.
 
-Example loot table from the request:
+Example loot table for one loot point:
 
 | Item | 確定 | 確率 | Amount |
 | --- | --- | --- | --- |
@@ -112,7 +118,7 @@ Settings are in `Config.Doors`. Without ox_doorlock the field is disabled and no
 2. Optionally create a party and invite players (nearby list or server ID). Invited players
    accept in the Heist HUD or with `/heistaccept`.
 3. The party leader starts a heist. Flow: go to the start point → clear every stage in order →
-   loot the marked locations → extract.
+   loot the marked locations → return to the same heist NPC and choose ヘイストを完了する.
 4. `/cancelheist` cancels the heist (leader) or leaves it (member).
 
 ## Commands
@@ -137,7 +143,8 @@ Command names can be changed in `Config.Commands`.
 | `Config.Cooldowns` | whether failed / cancelled heists trigger cooldowns |
 | `Config.Party` | party size, invite timeout, nearby radius |
 | `Config.Notify` | Heist HUD bubbles or ox_lib notifications |
-| `Config.Minigames` | minigame list – add your own with one entry |
+| `Config.Minigames`, `Config.MinigameGroups` | minigame list and picker tabs |
+| `Config.Awoken` | Awoken Minigames: rounds per difficulty, extra options, server verification |
 | `Config.NuiMinigames` | difficulty of the built-in minigames |
 | `Config.Doors` | ox_doorlock: lock on start, relock on end, delay |
 | `Config.Guards`, `Config.Interaction`, `Config.Guidance` | guards, markers, blips, GPS |
@@ -145,18 +152,40 @@ Command names can be changed in `Config.Commands`.
 
 All texts are in `shared/locale.lua` (the UI texts are in `web/`).
 
-### Adding a minigame
+### Minigames
+
+The stage's **ミニゲーム** button opens a picker with one tab per group:
+
+| Tab | Games | Needs |
+| --- | --- | --- |
+| 標準 | ox_lib skill check, pattern memory, number order, progress bar only | – |
+| ps-ui | Circle, Thermite, Maze, VarHack, Scrambler | `ps-ui` |
+| Awoken 反応 / 記憶 / パズル / 入力 / 精密操作 / 器用さ / アーケード | all 68 games | `awoken_minigames` |
+
+A tab whose resource is not running is greyed out.
+
+**Awoken Minigames** use the settings in `awoken_minigames/config/games/*.lua`. The stage
+difficulty sets how many times in a row the game must be cleared (`Config.Awoken.rounds`,
+default 1 / 2 / 3). Per-game options can be added per difficulty:
+
+```lua
+Config.Awoken.options = { skillCheck = { hard = { speed = 90, zoneSize = 12 } } }
+```
+
+With `Config.Awoken.serverVerify = true` the server asks awoken_minigames
+(`ConsumeResult`) whether the player really won before the stage counts. If honest players
+are rejected with 「ミニゲームの成功を確認できませんでした」, set it to `false`.
+
+Your own minigame is one entry:
 
 ```lua
 Config.Minigames.my_hack = {
-    label = 'My Hack',
+    label = 'マイハック', desc = '説明', group = 'basic', resource = 'my_hack',
     run = function(difficulty)            -- 'easy' | 'medium' | 'hard', runs on the client
         return exports['my_hack']:Start() -- must return true on success
     end,
 }
 ```
-
-It then appears in the stage's minigame dropdown.
 
 ## Security model
 
@@ -165,12 +194,16 @@ It then appears in the stage's minigame dropdown.
 - Stage and loot attempts are locked per player; a loot point is marked as looted *before*
   rewards are handed out, so it can never pay out twice.
 - Rewards and XP are rolled and granted only on the server, only to party members of the
-  session. XP goes to members who are at the extraction point (`Config.XP.participationDistance`).
+  session. XP goes to members who are near the heist NPC when it is handed in
+  (`Config.XP.participationDistance`).
 - Every creator action re-checks the admin ACE and sanitizes all input.
-- Minigames run on the client by nature; the server enforces a minimum duration and position.
+- Minigames run on the client by nature; the server enforces a minimum duration and position,
+  and for Awoken Minigames also asks that resource to confirm the win.
 
 ## Behaviour notes
 
+- Heists saved by an earlier version keep working: their heist-wide loot table is copied to
+  every loot point, and the old extraction point is ignored.
 - Only one crew can run a given heist at a time.
 - Disconnecting or switching character removes the player from the party and the heist; if
   nobody is left the heist ends. Leadership passes to the next member.
