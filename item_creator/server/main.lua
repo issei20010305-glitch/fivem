@@ -7,7 +7,9 @@ local busy = {}    -- [src] = true while a request is processed
 
 local ERRORS = {
     no_permission      = 'この操作を行う権限がありません。',
-    not_ready          = 'ox_inventory にブリッジがまだ読み込まれていません。サーバーを一度再起動してください。',
+    pending            = 'ブリッジは ox_inventory にインストール済みですが、まだ読み込まれていません。サーバーをもう一度再起動するか、サーバーコンソールで「refresh」→「ensure ox_inventory」を実行してください。',
+    missing            = 'ブリッジを ox_inventory にインストールできませんでした。サーバーコンソールの [item_creator] のエラーを確認してください。',
+    crashed            = 'ブリッジは読み込まれましたが起動に失敗しました。ox_inventory 起動時のコンソールエラーを確認してください。',
     busy               = '処理中です。少しお待ちください。',
     invalid_data       = '入力内容が正しくありません。',
     name               = 'スポーン名は半角の小文字英数字とアンダースコア (a-z, 0-9, _) で入力してください。',
@@ -30,6 +32,37 @@ end
 
 local function bridgeReady()
     return GetResourceState('ox_inventory') == 'started' and GlobalState['ox_inventory:creator'] ~= nil
+end
+
+local diskState = 'missing'
+
+AddEventHandler('item_creator:internal:diskStateResult', function(state)
+    diskState = state
+end)
+
+---Why the bridge is not running: 'pending' (installed, ox_inventory not reloaded
+---since), 'missing' (files are not in ox_inventory) or 'crashed' (loaded but failed).
+---@return string key of ERRORS, string english text for the console
+local function bridgeProblem()
+    diskState = 'missing'
+    TriggerEvent('item_creator:internal:diskState') -- answered synchronously by server/files.js
+    local disk = diskState
+
+    if disk ~= 'installed' then
+        return 'missing', 'the bridge files are NOT in the ox_inventory folder (see the error above, or install them by hand - README).'
+    end
+
+    local running = false
+    for i = 0, GetNumResourceMetadata('ox_inventory', 'server_script') - 1 do
+        if GetResourceMetadata('ox_inventory', 'server_script', i) == 'creator/server.lua' then running = true end
+    end
+
+    if GetConvar('itemcreator:pendingRestart', 'false') == 'true' or not running then
+        return 'pending', 'the bridge is installed, but ox_inventory has not been reloaded since. '
+            .. 'Restart the server, or type: refresh  then  ensure ox_inventory'
+    end
+    return 'crashed', 'ox_inventory loaded the bridge but it did not start. Look for a script error / '
+        .. '"[item_creator]" warning printed when ox_inventory started.'
 end
 
 ---------------------------------------------------------------------------
@@ -212,12 +245,12 @@ end
 
 lib.callback.register('item_creator:getData', function(src)
     if not isAdmin(src) then return false, ERRORS.no_permission end
-    if not bridgeReady() then return false, ERRORS.not_ready end
+    if not bridgeReady() then return false, ERRORS[(bridgeProblem())] end
     return { items = createdList(), limits = Config.Limits, maxImageKb = math.floor(Config.Image.maxBytes / 1024) }
 end)
 
 local function create(src, input)
-    if not bridgeReady() then return false, ERRORS.not_ready end
+    if not bridgeReady() then return false, ERRORS[(bridgeProblem())] end
 
     local name, definition = buildItem(input)
     if not name then return false, ERRORS[definition] or ERRORS.invalid_data end
@@ -298,7 +331,9 @@ CreateThread(function()
     end
     Wait(3000)
     if not bridgeReady() then
-        print('^3[item_creator]^0 ox_inventory is not running the bridge yet. '
-            .. (Config.AutoInstall and 'Restart the server once.' or 'Install the bridge manually (see README).'))
+        local _, text = bridgeProblem()
+        print(('^3[item_creator]^0 ^1not active:^0 %s'):format(text))
+    else
+        print('^3[item_creator]^0 ^2ready^0 - the ox_inventory bridge is running.')
     end
 end)

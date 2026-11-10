@@ -75,10 +75,34 @@ function install() {
     }
 
     if (changed) {
+        // Remembered for as long as this server process lives: ox_inventory was
+        // already running when its files were changed, so it has not loaded them.
+        SetConvar('itemcreator:pendingRestart', 'true');
         log('^2The bridge was installed into ox_inventory.^0');
-        log('^1Restart the server once to activate it (サーバーを一度再起動してください).^0');
+        log('^1ox_inventory was already running, so it has not loaded the bridge yet.^0');
+        log('^1Restart the server now, or type: refresh  then  ensure ox_inventory^0');
+        log('^1(今すぐサーバーを再起動するか、コンソールで refresh → ensure ox_inventory を実行してください)^0');
     }
 }
+
+/** What is actually on disk, for the status message. */
+function diskState() {
+    const target = inventoryPath();
+    if (!target) return 'no_inventory';
+    const files = ['server.lua', 'client.lua'].every((name) => fs.existsSync(path.join(target, 'creator', name)));
+    const manifest = (readIfExists(path.join(target, 'fxmanifest.lua')) || '').includes(MARKER);
+    return files && manifest ? 'installed' : 'missing';
+}
+
+on('item_creator:internal:diskState', () => {
+    let state = 'missing';
+    try {
+        state = diskState();
+    } catch (error) {
+        log(`^1could not read the ox_inventory folder: ${error.message}^0`);
+    }
+    emit('item_creator:internal:diskStateResult', state);
+});
 
 on('item_creator:internal:install', () => {
     try {

@@ -47,8 +47,15 @@ ox_inventory by replacing its folder, the bridge and your items are restored on 
    ensure item_creator
    ```
 
-3. Start the server. The console prints that the bridge was installed.
-4. **Restart the server once** so ox_inventory loads the bridge. This is the only restart.
+3. Start the server **with `item_creator` running**. The console prints
+   `The bridge was installed into ox_inventory`. At this point ox_inventory was already
+   running, so it has not loaded the bridge yet.
+4. **After that message**, restart the server once more (or type `refresh` and then
+   `ensure ox_inventory` in the server console). The console then prints
+   `[item_creator] ready`. This is the only time a restart is needed.
+
+If it is not active, the console line `[item_creator] not active: ...` says which of the
+three cases applies: files missing, ox_inventory not reloaded yet, or the bridge failed to start.
 5. Admins need the `group.admin` principal (change in `config.lua`):
 
    ```cfg
