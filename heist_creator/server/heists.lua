@@ -124,6 +124,9 @@ function Heists.Sanitize(input)
         if stage.item ~= '' and not Framework.ItemExists(stage.item) then
             return nil, L('err_item', stage.item)
         end
+        local doors, invalidDoor = Doors.Sanitize(raw.doors)
+        if not doors then return nil, L('err_door', i, invalidDoor) end
+        stage.doors = doors
         heist.stages[i] = stage
     end
 

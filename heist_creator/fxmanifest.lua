@@ -22,6 +22,7 @@ server_scripts {
     'server/xp.lua',
     'server/heists.lua',
     'server/settings.lua',
+    'server/doors.lua',
     'server/party.lua',
     'server/session.lua',
     'server/main.lua',

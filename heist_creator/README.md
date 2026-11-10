@@ -30,6 +30,7 @@ party and play them together. All in-game text is Japanese.
 | [ox_target](https://github.com/overextended/ox_target) | NPC and stage interactions |
 | [oxmysql](https://github.com/overextended/oxmysql) | database |
 | OneSync | required (server-side position checks, guard cleanup) |
+| [ox_doorlock](https://github.com/CommunityOx/ox_doorlock) | optional – unlock doors when a stage is completed |
 
 ## Installation
 
@@ -90,6 +91,21 @@ Example loot table from the request:
 
 The Heist HUD NPC is placed from the creator as well (**受付NPCの設定**).
 
+## Doors (ox_doorlock)
+
+With ox_doorlock running, every stage has a **突破時に解錠するドア** field. Pick one or more
+doors that already exist in ox_doorlock; the list is sorted by distance from where you stand
+(press **一覧を更新** next to the door).
+
+- When the crew reaches the start point, every door used by the heist is locked.
+- Completing a stage unlocks that stage's doors for everybody.
+- Doors with ox_doorlock's "autolock" are kept open while the heist is running.
+- When the heist ends (success, failure, cancel), the doors lock again after
+  `Config.Doors.relockDelay` seconds (default 60).
+
+Put the stage's hack point on the outside of its door, and the next stage / loot behind it.
+Settings are in `Config.Doors`. Without ox_doorlock the field is disabled and nothing else changes.
+
 ## Playing
 
 1. Talk to the heist NPC (ox_target) to open the Heist HUD.
@@ -123,6 +139,7 @@ Command names can be changed in `Config.Commands`.
 | `Config.Notify` | Heist HUD bubbles or ox_lib notifications |
 | `Config.Minigames` | minigame list – add your own with one entry |
 | `Config.NuiMinigames` | difficulty of the built-in minigames |
+| `Config.Doors` | ox_doorlock: lock on start, relock on end, delay |
 | `Config.Guards`, `Config.Interaction`, `Config.Guidance` | guards, markers, blips, GPS |
 | `Config.Security`, `Config.Limits` | validation tolerances and creator limits |
 
@@ -169,7 +186,7 @@ heist_creator/
 ├── sql/install.sql
 ├── shared/   config.lua, locale.lua, utils.lua
 ├── server/   framework.lua (Qbox / ox_inventory bridge), database.lua, cooldowns.lua, xp.lua,
-│             heists.lua, settings.lua, party.lua, session.lua, main.lua
+│             heists.lua, settings.lua, doors.lua, party.lua, session.lua, main.lua
 ├── client/   nui.lua, interact.lua, minigames.lua, guidance.lua, npc.lua, hud.lua,
 │             creator.lua, heist.lua, main.lua
 └── web/      index.html, css/style.css, js/ (app, overlay, minigames, creator, hud)

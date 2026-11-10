@@ -2,6 +2,7 @@
 const Creator = {
     heists: [],
     npcs: [],
+    doors: [], // ox_doorlock doors, nearest first
     meta: {},
     draft: null,
     view: 'heist', // 'heist' | 'npcs'
@@ -37,6 +38,7 @@ function newDraft() {
 function normalizeHeist(heist) {
     const copy = JSON.parse(JSON.stringify(heist));
     ['stages', 'guards', 'loots', 'rewards'].forEach((key) => { copy[key] = arr(copy[key]); });
+    copy.stages.forEach((stage) => { stage.doors = arr(stage.doors); });
     return Object.assign(newDraft(), copy);
 }
 
@@ -90,6 +92,25 @@ function coordsControl(path, withHeading) {
         <button class="btn small" data-act="pos-current" data-arg="${path}" title="今立っている場所を設定">現在位置</button>
         <button class="btn small" data-act="pos-pick" data-arg="${path}" title="カメラで狙った場所を設定">照準で指定</button>
         <button class="btn small ghost" data-act="pos-tp" data-arg="${path}"${c ? '' : ' disabled'} title="この場所へテレポート">TP</button>
+    </div>`;
+}
+
+/** Doors (ox_doorlock) unlocked when a stage is completed. */
+function doorsControl(stageIndex) {
+    if (!Creator.meta.doorsAvailable) {
+        return '<div class="doors"><span class="coords-value unset">ox_doorlock が起動していないため使用できません</span></div>';
+    }
+    const selected = arr(Creator.draft.stages[stageIndex].doors);
+    const chips = selected.map((id) => {
+        const door = Creator.doors.find((entry) => entry.id === id);
+        return `<span class="door-chip">${esc(door ? door.name : '不明なドア')} <small>#${id}</small><button data-act="door-remove" data-arg="${stageIndex}.${id}" title="外す">×</button></span>`;
+    }).join('');
+    const options = Creator.doors.filter((door) => !selected.includes(door.id)).slice(0, 60).map((door) =>
+        `<option value="${door.id}">${esc(door.name)} (#${door.id}) ・ ${door.distance}m</option>`).join('');
+    return `<div class="doors">
+        ${chips}
+        <select data-door-add="${stageIndex}"><option value="">＋ ドアを追加 (近い順)</option>${options}</select>
+        <button class="btn small" data-act="doors-refresh" title="現在位置から近い順に並べ直す">一覧を更新</button>
     </div>`;
 }
 
@@ -167,6 +188,7 @@ const TAB_RENDERERS = {
             ${field('必要アイテム', textInput(`stages.${i}.item`, { list: 'dl-items', max: 64, placeholder: '空欄 = 不要' }), 'アイテム名 (例: lockpick)')}
             ${field('必要数', numberInput(`stages.${i}.itemCount`, { min: 1, max: 100 }))}
             <div class="field">${checkbox(`stages.${i}.consume`, '成功時にアイテムを消費する')}</div>
+            ${field('突破時に解錠するドア (ox_doorlock)', doorsControl(i), 'このステージを突破するとドアが解錠され、ヘイスト終了後に再び施錠されます。ドアの近くで「一覧を更新」を押すと探しやすくなります。', true)}
         `)).join('');
         return `${cards || emptyState('ステージがありません。ハッキングやミニゲームのステージを1つ以上追加してください。')}
             <div class="row-actions"><button class="btn primary" data-act="add" data-arg="stages">＋ ステージを追加</button></div>`;
@@ -299,7 +321,7 @@ async function addEntry(kind) {
         const first = arr(Creator.meta.minigames)[0];
         d.stages.push({
             label: '', coords: await post('creator:getPosition'), interaction: 'key', item: '', itemCount: 1,
-            consume: false, minigame: first ? first.id : '', difficulty: 'medium',
+            consume: false, minigame: first ? first.id : '', difficulty: 'medium', doors: [],
         });
     } else if (kind === 'guards') {
         d.guards.push({
@@ -418,6 +440,17 @@ const CREATOR_ACTIONS = {
         const coords = getPath(Creator.draft, arg);
         if (coords) post('creator:teleport', coords);
     },
+    'door-remove'(arg) {
+        const [stage, id] = arg.split('.').map(Number);
+        const stageData = Creator.draft.stages[stage];
+        stageData.doors = arr(stageData.doors).filter((door) => door !== id);
+        renderCreator();
+    },
+    async 'doors-refresh'() {
+        const answer = await post('creator:getDoors');
+        if (answer.ok) Creator.doors = arr(answer.result);
+        renderCreator();
+    },
     'save-heist': saveHeist,
     'delete-heist': deleteHeist,
     async 'reset-cooldown'() {
@@ -466,6 +499,13 @@ $('#creator').addEventListener('click', (event) => {
 $('#creator-content').addEventListener('input', (event) => {
     const input = event.target;
 
+    if (input.dataset.doorAdd != null) {
+        const stage = Creator.draft.stages[Number(input.dataset.doorAdd)];
+        const id = Number(input.value);
+        if (id && !arr(stage.doors).includes(id)) stage.doors = arr(stage.doors).concat(id);
+        renderCreator();
+        return;
+    }
     if (input.dataset.npc != null) {
         Creator.npcs[Number(input.dataset.npc)].model = input.value.trim();
         return;
@@ -486,6 +526,7 @@ on('creator:open', (data) => {
     Creator.heists = arr(data.heists);
     Creator.npcs = arr(data.npcs).map((npc) => Object.assign({}, npc));
     Creator.meta = data.meta || {};
+    Creator.doors = arr(data.doors);
     // The unsaved draft is kept between openings so an admin can walk around
     // and continue where they left off.
     if (firstOpen) Creator.draft = newDraft();

@@ -220,6 +220,13 @@ select option { background: #10131a; }
 }
 .coords-value.unset { color: var(--red); font-family: inherit; }
 
+.doors { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.doors select { width: auto; flex: 1; min-width: 14rem; }
+.door-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.35rem 0.3rem 0.7rem; font-size: 0.8rem; background: rgba(245, 185, 66, 0.1); border: 1px solid var(--accent); border-radius: 2rem; }
+.door-chip small { color: var(--mute); }
+.door-chip button { font: inherit; width: 1.3rem; height: 1.3rem; line-height: 1; color: var(--text); background: transparent; border: none; border-radius: 50%; cursor: pointer; }
+.door-chip button:hover { background: rgba(239, 91, 91, 0.25); }
+
 .list-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1rem 1rem; margin-bottom: 0.8rem; }
 .list-card-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; }
 .list-index {

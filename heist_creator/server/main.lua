@@ -179,11 +179,16 @@ local function creatorMeta()
         limits = Config.Limits,
         maxParty = Config.Party.maxSize,
         defaultNpcModel = Config.Npc.defaultModel,
+        doorsAvailable = Doors.Available(),
     }
 end
 
-register('admin:getData', function()
-    return { heists = Heists.AdminList(), npcs = Settings.npcs, meta = creatorMeta() }
+register('admin:getData', function(src)
+    return { heists = Heists.AdminList(), npcs = Settings.npcs, meta = creatorMeta(), doors = Doors.List(src) }
+end, true)
+
+register('admin:getDoors', function(src)
+    return true, Doors.List(src)
 end, true)
 
 register('admin:save', function(src, input)

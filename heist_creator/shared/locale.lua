@@ -34,6 +34,7 @@ Locales = {
     err_stage_coords     = 'ステージ %d の位置が設定されていません。',
     err_stage_minigame   = 'ステージ %d のミニゲームが無効です。',
     err_item             = 'アイテム「%s」は存在しません。',
+    err_door             = 'ステージ %d のドア (ID %d) が ox_doorlock に存在しません。',
     err_guard_model      = 'ガード %d のモデルまたは武器が無効です。',
     err_guard_coords     = 'ガード %d の位置が設定されていません。',
     err_loot_coords      = '物色ポイント %d の位置が設定されていません。',
@@ -84,6 +85,7 @@ Locales = {
     stage_failed         = '失敗した…もう一度試せ。',
     stage_failed_by      = '%s がセキュリティ解除に失敗した。',
     stage_done_by        = '%s がステージ %d / %d を突破した。',
+    doors_unlocked       = 'ドアのロックが解除された。',
     need_item            = '「%s」が %d 個必要です。',
 
     -- Loot

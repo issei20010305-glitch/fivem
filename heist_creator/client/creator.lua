@@ -118,6 +118,7 @@ forward('creator:save', 'heist_creator:admin:save', function(body) return body.h
 forward('creator:delete', 'heist_creator:admin:delete', function(body) return body.id end)
 forward('creator:toggle', 'heist_creator:admin:toggle', function(body) return body.id, body.enabled end)
 forward('creator:resetCooldown', 'heist_creator:admin:resetCooldown', function(body) return body.id end)
+forward('creator:getDoors', 'heist_creator:admin:getDoors', function() end)
 forward('creator:saveNpcs', 'heist_creator:admin:saveNpcs', function(body) return body.npcs end)
 
 function CloseCreator()

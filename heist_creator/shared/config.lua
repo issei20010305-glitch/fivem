@@ -164,6 +164,18 @@ Config.Guards = {
 }
 
 ---------------------------------------------------------------------------
+-- Doors (ox_doorlock, optional)
+-- In the creator each stage can list doors. They are unlocked when the stage
+-- is completed, so heists can take place inside locked MLOs.
+---------------------------------------------------------------------------
+Config.Doors = {
+    enabled      = true,
+    lockOnStart  = true, -- lock every door of the heist when the crew arrives
+    relockOnEnd  = true, -- lock the doors again when the heist ends
+    relockDelay  = 60,   -- seconds after the heist ended before the doors lock again
+}
+
+---------------------------------------------------------------------------
 -- Guidance (objective card, bubbles, GPS)
 ---------------------------------------------------------------------------
 Config.Guidance = {
@@ -201,6 +213,7 @@ Config.Security = {
 ---------------------------------------------------------------------------
 Config.Limits = {
     stages       = 12,
+    stageDoors   = 8,
     guards       = 40,
     loots        = 30,
     rewards      = 25,

@@ -212,6 +212,7 @@ function Sessions.End(session, reason, results)
 
     applyCooldowns(session, reason)
     deleteGuards(session)
+    Doors.Release(session, reason == 'restart')
 
     for i = 1, #session.members do
         local member = session.members[i]
@@ -266,6 +267,7 @@ local function arrive(session)
     if heist.timeLimit > 0 then
         session.deadline = os.time() + heist.timeLimit * 60
     end
+    Doors.Prepare(session)
 
     if Config.PoliceAlert.enabled then
         local coords = toVector(heist.start)
@@ -382,6 +384,9 @@ function Sessions.FinishStage(src, index, success)
     end
 
     notifyAll(session, L('stage_done_by', name, index, #heist.stages), 'success')
+    if Doors.Unlock(session, stage.doors) then
+        notifyAll(session, L('doors_unlocked'), 'info')
+    end
     Sessions.Sync(session)
     return true
 end
