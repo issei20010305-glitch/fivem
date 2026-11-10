@@ -23,6 +23,7 @@ local ERRORS = {
     timeout            = '画像のダウンロードがタイムアウトしました。',
     too_many_redirects = '画像URLのリダイレクトが多すぎます。',
     download           = '画像をダウンロードできませんでした (%s)。',
+    image_save         = '画像をサーバーに保存できませんでした。ox_inventory/web/images フォルダの書き込み権限を確認してください。',
     save               = 'アイテムを登録できませんでした (%s)。',
 }
 
@@ -34,27 +35,94 @@ local function bridgeReady()
     return GetResourceState('ox_inventory') == 'started' and GlobalState['ox_inventory:creator'] ~= nil
 end
 
-local diskState = 'missing'
+---------------------------------------------------------------------------
+-- Bridge installation (all file access goes through FiveM natives)
+---------------------------------------------------------------------------
+local OX = 'ox_inventory'
+local SELF = GetCurrentResourceName()
+local MARKER = '-- item_creator bridge'
+local DATA_FILE = 'data/created_items.lua'
 
-AddEventHandler('item_creator:internal:diskStateResult', function(state)
-    diskState = state
-end)
+local function log(text)
+    print(('^3[item_creator]^0 %s'):format(text))
+end
+
+---Where the bridge scripts live inside ox_inventory. Installs made by hand
+---into "creator/" keep working; new installs use an existing folder, because
+---SaveResourceFile cannot create folders.
+---@return string serverPath, string clientPath, string manifest
+local function bridgePaths()
+    local manifest = LoadResourceFile(OX, 'fxmanifest.lua') or ''
+    if manifest:find('creator/server.lua', 1, true) then
+        return 'creator/server.lua', 'creator/client.lua', manifest
+    end
+    return 'modules/items/creator_server.lua', 'modules/items/creator_client.lua', manifest
+end
+
+local function write(resource, file, content, binary)
+    return SaveResourceFile(resource, file, content, binary and #content or -1) and true or false
+end
+
+---@return boolean changed, string? error
+local function install()
+    local serverPath, clientPath, manifest = bridgePaths()
+    if manifest == '' then return false, 'ox_inventory/fxmanifest.lua could not be read' end
+
+    local changed = false
+
+    for source, target in pairs({ ['bridge/server.lua'] = serverPath, ['bridge/client.lua'] = clientPath }) do
+        local content = LoadResourceFile(SELF, source)
+        if not content then return false, ('%s is missing from item_creator'):format(source) end
+        if LoadResourceFile(OX, target) ~= content then
+            if not write(OX, target, content) then return false, ('could not write ox_inventory/%s'):format(target) end
+            changed = true
+        end
+    end
+
+    -- Data file. Restored from the backup when ox_inventory was replaced by an update.
+    if not LoadResourceFile(OX, DATA_FILE) then
+        local backup = LoadResourceFile(SELF, 'backup/created_items.lua')
+        if not write(OX, DATA_FILE, backup or 'return {}\n') then
+            return false, ('could not write ox_inventory/%s'):format(DATA_FILE)
+        end
+        if backup then
+            local chunk = load(backup, 'backup', 't', {})
+            local ok, items = pcall(chunk or function() return {} end)
+            for name in pairs(ok and type(items) == 'table' and items or {}) do
+                local image = LoadResourceFile(SELF, ('backup/img_%s.png'):format(name))
+                local target = ('web/images/%s.png'):format(name)
+                if image and not LoadResourceFile(OX, target) then write(OX, target, image, true) end
+            end
+            log('restored created items and images from the backup.')
+        end
+        changed = true
+    end
+
+    if not manifest:find(MARKER, 1, true) then
+        local block = ("\n%s (added automatically by the item_creator resource)\nserver_script '%s'\nclient_script '%s'\n")
+            :format(MARKER, serverPath, clientPath)
+        if not write(OX, 'fxmanifest.lua', manifest:gsub('%s*$', '\n') .. block) then
+            return false, 'could not write ox_inventory/fxmanifest.lua'
+        end
+        changed = true
+    end
+
+    return changed
+end
 
 ---Why the bridge is not running: 'pending' (installed, ox_inventory not reloaded
 ---since), 'missing' (files are not in ox_inventory) or 'crashed' (loaded but failed).
 ---@return string key of ERRORS, string english text for the console
 local function bridgeProblem()
-    diskState = 'missing'
-    TriggerEvent('item_creator:internal:diskState') -- answered synchronously by server/files.js
-    local disk = diskState
+    local serverPath, clientPath, manifest = bridgePaths()
 
-    if disk ~= 'installed' then
+    if not manifest:find(MARKER, 1, true) or not LoadResourceFile(OX, serverPath) or not LoadResourceFile(OX, clientPath) then
         return 'missing', 'the bridge files are NOT in the ox_inventory folder (see the error above, or install them by hand - README).'
     end
 
     local running = false
-    for i = 0, GetNumResourceMetadata('ox_inventory', 'server_script') - 1 do
-        if GetResourceMetadata('ox_inventory', 'server_script', i) == 'creator/server.lua' then running = true end
+    for i = 0, GetNumResourceMetadata(OX, 'server_script') - 1 do
+        if GetResourceMetadata(OX, 'server_script', i) == serverPath then running = true end
     end
 
     if GetConvar('itemcreator:pendingRestart', 'false') == 'true' or not running then
@@ -143,24 +211,74 @@ local function buildItem(input)
 end
 
 ---------------------------------------------------------------------------
--- Image download (done by server/files.js)
+-- Image download (HTTP in server/files.js, saving here)
 ---------------------------------------------------------------------------
-AddEventHandler('item_creator:internal:downloaded', function(id, ok, result)
+local BASE64 = {}
+do
+    local alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    for i = 1, 64 do BASE64[alphabet:byte(i)] = i - 1 end
+end
+
+---@param data string base64
+---@return string bytes
+local function decodeBase64(data)
+    data = data:gsub('[^%w%+/]', '')
+    local out, n, length = {}, 0, #data
+
+    for i = 1, length - 3, 4 do
+        local a, b, c, d = data:byte(i, i + 3)
+        local value = (BASE64[a] << 18) | (BASE64[b] << 12) | (BASE64[c] << 6) | BASE64[d]
+        n = n + 1
+        out[n] = string.char((value >> 16) & 255, (value >> 8) & 255, value & 255)
+    end
+
+    local rest = length % 4
+    if rest == 3 then
+        local a, b, c = data:byte(length - 2, length)
+        local value = (BASE64[a] << 18) | (BASE64[b] << 12) | (BASE64[c] << 6)
+        out[n + 1] = string.char((value >> 16) & 255, (value >> 8) & 255)
+    elseif rest == 2 then
+        local a, b = data:byte(length - 1, length)
+        out[n + 1] = string.char((((BASE64[a] << 18) | (BASE64[b] << 12)) >> 16) & 255)
+    end
+
+    return table.concat(out)
+end
+
+AddEventHandler('item_creator:internal:downloaded', function(id, ok, result, base64)
     local waiting = pending[id]
     if waiting then
         pending[id] = nil
-        waiting:resolve({ ok, result })
+        waiting:resolve({ ok, result, base64 })
     end
 end)
 
+---Downloads the image and stores it as ox_inventory/web/images/<name>.png.
+---ox_inventory only ships *.png, so every format gets that name; browsers
+---detect the real format from the content.
 ---@return boolean ok, string result data URI or error key
 local function downloadImage(url, name)
     requestId = requestId + 1
     local waiting = promise.new()
     pending[requestId] = waiting
-    TriggerEvent('item_creator:internal:download', requestId, url, name, Config.Image.maxBytes, Config.Image.timeoutMs)
+    TriggerEvent('item_creator:internal:download', requestId, url, Config.Image.maxBytes, Config.Image.timeoutMs)
+
     local result = Citizen.Await(waiting)
-    return result[1] == true, result[2]
+    if result[1] ~= true then return false, result[2] end
+
+    local mime, base64 = result[2], result[3]
+    local bytes = decodeBase64(base64)
+
+    if not write(OX, ('web/images/%s.png'):format(name), bytes, true) then return false, 'image_save' end
+    write(SELF, ('backup/img_%s.png'):format(name), bytes, true)
+
+    return true, ('data:%s;base64,%s'):format(mime, base64)
+end
+
+---Copy of the created items inside this resource (survives an ox_inventory update).
+local function backupItems()
+    local content = LoadResourceFile(OX, DATA_FILE)
+    if content then write(SELF, 'backup/created_items.lua', content) end
 end
 
 ---------------------------------------------------------------------------
@@ -273,7 +391,7 @@ local function create(src, input)
     local ok, err = exports.ox_inventory:CreatorSave(name, definition, image)
     if not ok then return false, err == 'exists' and ERRORS.exists or ERRORS.save:format(err) end
 
-    TriggerEvent('item_creator:internal:backup')
+    backupItems()
     discordLog(src, name, definition, imageUrl, edited)
     print(('^3[item_creator]^0 %s (ID %s) %s item "%s"'):format(GetPlayerName(src), src, edited and 'edited' or 'created', name))
 
@@ -327,13 +445,25 @@ end
 
 CreateThread(function()
     if Config.AutoInstall then
-        TriggerEvent('item_creator:internal:install')
+        local ok, changed, err = pcall(install)
+        if not ok or err then
+            log(('^1bridge installation failed: %s^0'):format(not ok and changed or err))
+        elseif changed then
+            -- Remembered for as long as this server process lives: ox_inventory was
+            -- already running when its files were changed, so it has not loaded them.
+            SetConvar('itemcreator:pendingRestart', 'true')
+            log('^2The bridge was installed / updated in ox_inventory.^0')
+            log('^1ox_inventory was already running, so it has not loaded it yet.^0')
+            log('^1Restart the server now, or type: refresh  then  ensure ox_inventory^0')
+            log('^1(今すぐサーバーを再起動するか、コンソールで refresh → ensure ox_inventory を実行してください)^0')
+        end
     end
+
     Wait(3000)
-    if not bridgeReady() then
-        local _, text = bridgeProblem()
-        print(('^3[item_creator]^0 ^1not active:^0 %s'):format(text))
+    if bridgeReady() then
+        log('^2ready^0 - the ox_inventory bridge is running.')
     else
-        print('^3[item_creator]^0 ^2ready^0 - the ox_inventory bridge is running.')
+        local _, text = bridgeProblem()
+        log(('^1not active:^0 %s'):format(text))
     end
 end)

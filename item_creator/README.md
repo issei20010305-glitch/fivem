@@ -23,7 +23,7 @@ Created items appear in the list on the right; click one to edit it.
 ox_inventory keeps its item list in memory and has no way to add to it from another resource.
 This resource therefore installs a small **bridge** into ox_inventory:
 
-- `ox_inventory/creator/server.lua` and `creator/client.lua` (new files)
+- `ox_inventory/modules/items/creator_server.lua` and `creator_client.lua` (new files)
 - two lines appended to `ox_inventory/fxmanifest.lua`
 - `ox_inventory/data/created_items.lua` – the created items, in normal ox_inventory format
 
@@ -32,6 +32,9 @@ list on the server and on every client, and loads the saved items on start.
 
 Images are saved to `ox_inventory/web/images/<name>.png`. Until the next restart the picture
 is sent to players directly; after a restart it is a normal ox_inventory image.
+
+All files are written with FiveM's own file functions, so it works on servers where the Node
+runtime is not allowed to write files.
 
 A copy of the created items and their images is kept in `item_creator/backup/`. If you update
 ox_inventory by replacing its folder, the bridge and your items are restored on the next start.
@@ -62,11 +65,12 @@ three cases applies: files missing, ox_inventory not reloaded yet, or the bridge
    add_principal identifier.license:xxxxxxxx group.admin
    ```
 
-To install the bridge by hand instead, set `Config.AutoInstall = false`, copy `bridge/server.lua`
-and `bridge/client.lua` to `ox_inventory/creator/`, create `ox_inventory/data/created_items.lua`
+To install the bridge by hand instead, set `Config.AutoInstall = false`, create the folder
+`ox_inventory/creator/`, copy `bridge/server.lua` and `bridge/client.lua` into it, create `ox_inventory/data/created_items.lua`
 containing `return {}`, and add to the end of `ox_inventory/fxmanifest.lua`:
 
 ```lua
+-- item_creator bridge
 server_script 'creator/server.lua'
 client_script 'creator/client.lua'
 ```
