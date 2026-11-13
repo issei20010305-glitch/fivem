@@ -3,6 +3,8 @@
 Creator.propPicker = null; // { mode: 'add'|'change', index, tab, query, selected, valid, size }
 Creator.allProps = null;   // every object name of the game, loaded on first use
 Creator.taxonomy = null;   // working copy while the ジャンル・タグ page is open
+Creator.showProps = true;  // show the heist's props in the game world while editing
+Creator.shownSignature = '';
 
 // ---------------------------------------------------------------------------
 // Genres and tags
@@ -171,10 +173,25 @@ TAB_RENDERERS.props = function () {
         </div>`;
     }).join('');
 
-    return `<div class="hint-box">プロップはヘイスト中だけ出現するオブジェクトです。クルーが近づくと出現し、ヘイストが完了・失敗・中止されると (エリア離脱や切断を含む) 自動的に消えます。追加するとプレビューを見ながらモデルを選び、半透明の見本を動かして配置できます。</div>
+    return `<div class="row-actions top"><label class="check"><input type="checkbox" id="show-props"${Creator.showProps ? ' checked' : ''}><span>配置済みのプロップをゲーム内に表示する (番号付き・重ならないよう確認できます)</span></label></div>
+        <div class="hint-box">プロップはヘイスト中だけ出現するオブジェクトです。クルーが近づくと出現し、ヘイストが完了・失敗・中止されると (エリア離脱や切断を含む) 自動的に消えます。追加するとプレビューを見ながらモデルを選び、半透明の見本を動かして配置できます。</div>
         ${cards || emptyState('プロップがありません。金庫・現金・ノートパソコンなどをヘイスト用に配置できます。')}
         <div class="row-actions"><button class="btn primary" data-act="prop-add">＋ プロップを追加</button></div>`;
 };
+
+/** Props of the draft that have a position, as the game needs them. */
+function placedProps() {
+    return arr(Creator.draft && Creator.draft.props).map((prop) => ({ model: prop.model, coords: prop.coords || null }));
+}
+
+/** Shows the draft's props in the game world (only sends when something changed). */
+function syncWorldProps() {
+    const payload = { show: Creator.showProps && Creator.view === 'heist', props: placedProps() };
+    const signature = JSON.stringify(payload);
+    if (signature === Creator.shownSignature) return;
+    Creator.shownSignature = signature;
+    post('creator:showProps', payload);
+}
 
 /** Keeps stage / loot links correct when a prop is removed. */
 function unlinkProp(index) {
@@ -186,8 +203,18 @@ function unlinkProp(index) {
     });
 }
 
-async function placeNewProp(model, label, previous) {
-    const answer = await post('creator:placeProp', { model, coords: previous || null });
+/**
+ * @param moving index of the prop that is being re-placed (it is hidden meanwhile), or -1
+ */
+async function placeNewProp(model, label, previous, moving) {
+    const answer = await post('creator:placeProp', {
+        model,
+        coords: previous || null,
+        props: Creator.showProps ? placedProps() : [],
+        moving: moving >= 0 ? moving + 1 : null,
+    });
+    Creator.shownSignature = ''; // the game changed what it shows; send the list again
+
     if (!answer.ok || !answer.coords) return null;
     return { model, label: label || '', coords: answer.coords };
 }
@@ -355,7 +382,7 @@ Object.assign(CREATOR_ACTIONS, {
     },
     async 'prop-place'(arg) {
         const prop = Creator.draft.props[Number(arg)];
-        const placed = await placeNewProp(prop.model, prop.label, prop.coords);
+        const placed = await placeNewProp(prop.model, prop.label, prop.coords, Number(arg));
         if (placed) prop.coords = placed.coords;
         renderCreator();
     },
@@ -387,6 +414,12 @@ Object.assign(CREATOR_ACTIONS, {
             renderCreator();
         }
     },
+});
+
+$('#creator-content').addEventListener('change', (event) => {
+    if (event.target.id !== 'show-props') return;
+    Creator.showProps = event.target.checked;
+    syncWorldProps();
 });
 
 $('#creator-props').addEventListener('input', (event) => {

@@ -427,6 +427,7 @@ end
 RegisterNetEvent('heist_creator:client:start', function(heist, state)
     if type(heist) ~= 'table' or type(state) ~= 'table' then return end
     cleanup()
+    ClearCreatorProps() -- copies shown by the creator would double the real props
     active = { heist = heist, state = state }
     Notify(L('heist_started', heist.name), 'success')
     refresh()

@@ -119,10 +119,14 @@ The プロップ tab adds objects that exist only while the heist runs (a safe, 
 
 - **Choosing a model:** the picker has a search bar, a よく使う list with Japanese names
   (`Config.Props.favourites`) and every object of the game (about 21,000 names in
-  `web/props.txt`). The selected model is shown **in the game world**, slowly turning, so you
-  see the real thing; ↑ / ↓ walk through the list.
+  `web/props.txt`). The selected model is shown **full screen**: a camera frames it to its
+  size against the sky and lights it, so even small props are clear at any time of day. It
+  turns slowly; ↑ / ↓ walk through the list.
 - **Placing it:** a see-through copy follows where you aim. `E` places, `←` / `→` rotate,
   `↑` / `↓` raise or lower, `G` puts it back on the surface, `Backspace` cancels.
+- **Seeing what is already placed:** while a heist is being edited, its props are shown in
+  the world with their number (only to you), also after closing the window to walk around,
+  so new ones can be placed without overlapping. Turn it off with the checkbox in the tab.
 - **Lifetime:** props spawn when a crew member gets close and are removed when the heist is
   completed, failed, cancelled, times out, the crew leaves the area, everyone disconnects, or
   the resource stops.

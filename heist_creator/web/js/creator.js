@@ -414,6 +414,7 @@ function renderCreator() {
     content.scrollTop = scroll;
     renderPicker();
     renderPropPicker();
+    syncWorldProps();
 }
 
 function fillDatalists() {
@@ -676,6 +677,7 @@ $('#creator-content').addEventListener('input', (event) => {
 });
 
 on('creator:open', (data) => {
+    Creator.shownSignature = '';
     const firstOpen = !Creator.draft;
     Creator.heists = arr(data.heists);
     Creator.npcs = arr(data.npcs).map((npc) => Object.assign({}, npc));

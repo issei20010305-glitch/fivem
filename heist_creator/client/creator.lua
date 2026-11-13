@@ -95,12 +95,18 @@ local function loadPropModel(name)
 end
 
 local function clearPreview()
-    if preview and DoesEntityExist(preview.object) then DeleteEntity(preview.object) end
+    if not preview then return end
+    if DoesEntityExist(preview.object) then DeleteEntity(preview.object) end
+    if preview.camera then
+        RenderScriptCams(false, false, 0, true, true)
+        DestroyCam(preview.camera, false)
+    end
     preview = nil
 end
 
----Shows the model in front of the admin, slowly turning, so it can be judged
----without leaving the creator.
+---Shows the model on its own, filling the screen: it is put high in the sky
+---(nothing in front of or behind it), a camera is framed to its size and it
+---is lit, so even a tiny prop is easy to see at any time of day.
 local function showPreview(name)
     clearPreview()
     local hash = loadPropModel(name)
@@ -108,27 +114,135 @@ local function showPreview(name)
 
     local ped = cache.ped or PlayerPedId()
     local min, max = GetModelDimensions(hash)
-    local size = #(max - min)
-    local origin = GetEntityCoords(ped) + GetEntityForwardVector(ped) * math.min(30.0, math.max(2.2, size * 1.1 + 1.2))
-    local object = CreateObjectNoOffset(hash, origin.x, origin.y, origin.z - 1.0 - min.z, false, false, false)
+    local size = math.max(0.05, #(max - min))
+    local base = GetEntityCoords(ped) + vector3(0.0, 0.0, 150.0)
+
+    local object = CreateObjectNoOffset(hash, base.x, base.y, base.z, false, false, false)
     SetModelAsNoLongerNeeded(hash)
     if not object or object == 0 then return false end
 
     SetEntityCollision(object, false, false)
     FreezeEntityPosition(object, true)
-    local current = { object = object }
+
+    -- Aim at the middle of the model; the distance follows its size so that a
+    -- coin and a container both fill about the same part of the screen.
+    local centre = base + vector3(0.0, 0.0, (min.z + max.z) / 2)
+    local distance = math.max(0.35, size * 1.35)
+    local eye = centre + vector3(0.0, -distance, distance * 0.35)
+
+    local camera = CreateCam('DEFAULT_SCRIPTED_CAMERA', true)
+    SetCamCoord(camera, eye.x, eye.y, eye.z)
+    PointCamAtCoord(camera, centre.x, centre.y, centre.z)
+    SetCamFov(camera, 40.0)
+    SetCamNearClip(camera, 0.02)
+    SetCamActive(camera, true)
+    RenderScriptCams(true, false, 0, true, true)
+
+    local current = { object = object, camera = camera }
     preview = current
 
     CreateThread(function()
-        local heading = GetEntityHeading(ped) + 180.0
+        local heading = 0.0
+        local reach = distance * 4.0 + 4.0
         while preview == current and DoesEntityExist(object) do
-            heading = (heading + 0.6) % 360.0
+            heading = (heading + 0.5) % 360.0
             SetEntityHeading(object, heading)
+            -- Two lights (camera side and opposite side) so it is clear at night too.
+            DrawLightWithRange(eye.x, eye.y, eye.z + distance * 0.5, 255, 255, 255, reach, 4.0)
+            DrawLightWithRange(centre.x + distance, centre.y + distance, centre.z + distance, 255, 255, 255, reach, 2.0)
+            HideHudAndRadarThisFrame()
             Wait(0)
         end
     end)
     return true, Utils.Round(size, 1)
 end
+
+---------------------------------------------------------------------------
+-- The props of the heist being edited are shown in the world (local copies),
+-- so new ones can be placed around them without overlapping.
+---------------------------------------------------------------------------
+local shown = {} -- [key] = { object, index, coords }
+
+local function shownKey(prop)
+    local c = prop.coords
+    return ('%s|%.2f|%.2f|%.2f|%.1f'):format(prop.model, c.x, c.y, c.z, c.w or 0.0)
+end
+
+local function removeShown(key)
+    local entry = shown[key]
+    if entry and DoesEntityExist(entry.object) then DeleteEntity(entry.object) end
+    shown[key] = nil
+end
+
+---@param props? table[] list of { model, coords }; nil or empty removes everything
+---@param exclude? number 1-based index of a prop that must not be shown (it is being moved)
+local function syncShownProps(props, exclude)
+    local wanted = {}
+    for i = 1, #(props or {}) do
+        local prop = props[i]
+        if i ~= exclude and type(prop) == 'table' and type(prop.model) == 'string' and type(prop.coords) == 'table'
+            and tonumber(prop.coords.x) and tonumber(prop.coords.y) and tonumber(prop.coords.z) then
+            wanted[shownKey(prop)] = { prop = prop, index = i }
+        end
+    end
+
+    for key in pairs(shown) do
+        if not wanted[key] then removeShown(key) end
+    end
+
+    for key, entry in pairs(wanted) do
+        if shown[key] then
+            shown[key].index = entry.index
+        else
+            local hash = loadPropModel(entry.prop.model)
+            if hash then
+                local c = entry.prop.coords
+                local object = CreateObjectNoOffset(hash, c.x + 0.0, c.y + 0.0, c.z + 0.0, false, false, false)
+                SetModelAsNoLongerNeeded(hash)
+                if object and object ~= 0 then
+                    SetEntityHeading(object, (tonumber(c.w) or 0.0) + 0.0)
+                    FreezeEntityPosition(object, true)
+                    local _, max = GetModelDimensions(hash)
+                    shown[key] = { object = object, index = entry.index, top = math.max(0.0, max.z) }
+                end
+            end
+        end
+    end
+end
+
+---Removes the displayed props (creator closed for good, heist started, resource stopped).
+function ClearCreatorProps()
+    syncShownProps(nil)
+end
+
+-- Number above every displayed prop.
+CreateThread(function()
+    while true do
+        if next(shown) then
+            local origin = GetEntityCoords(cache.ped or PlayerPedId())
+            for _, entry in pairs(shown) do
+                if DoesEntityExist(entry.object) then
+                    local c = GetEntityCoords(entry.object)
+                    if #(origin - c) < 30.0 then
+                        SetDrawOrigin(c.x, c.y, c.z + entry.top + 0.25, 0)
+                        SetTextScale(0.32, 0.32)
+                        SetTextFont(0)
+                        SetTextColour(245, 185, 66, 235)
+                        SetTextOutline()
+                        SetTextCentre(true)
+                        BeginTextCommandDisplayText('STRING')
+                        AddTextComponentSubstringPlayerName(('#%d'):format(entry.index))
+                        EndTextCommandDisplayText(0.0, 0.0)
+                        ClearDrawOrigin()
+                    end
+                end
+            end
+            Wait(0)
+        else
+            Wait(500)
+        end
+    end
+end)
 
 ---Lets the admin put a see-through copy of the prop where it should spawn.
 ---@param name string
@@ -265,8 +379,17 @@ end)
 RegisterNUICallback('creator:placeProp', function(body, cb)
     if NUI.open ~= 'creator' then return cb({ ok = false }) end
     clearPreview()
+    -- A prop that is being moved is taken out of the world while it is carried.
+    if type(body.props) == 'table' then syncShownProps(body.props, tonumber(body.moving)) end
     local coords = withoutUi(function() return placeProp(body.model, body.coords) end)
     cb({ ok = coords ~= nil, coords = coords })
+end)
+
+RegisterNUICallback('creator:showProps', function(body, cb)
+    if NUI.open == 'creator' then
+        syncShownProps(body.show and body.props or nil)
+    end
+    cb({})
 end)
 
 RegisterNUICallback('creator:pickObject', function(_, cb)
@@ -326,5 +449,8 @@ function CloseCreator()
 end
 
 AddEventHandler('onResourceStop', function(resource)
-    if resource == GetCurrentResourceName() then clearPreview() end
+    if resource == GetCurrentResourceName() then
+        clearPreview()
+        ClearCreatorProps()
+    end
 end)
