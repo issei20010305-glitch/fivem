@@ -15,6 +15,7 @@ Locales = {
     word_guards          = 'ガード',
     word_loots           = '物色ポイント',
     word_rewards         = '報酬',
+    word_props           = 'プロップ',
 
     -- Commands
     cmd_create           = 'Heist Creatorを開く (管理者)',
@@ -34,6 +35,8 @@ Locales = {
     err_stage_minigame   = 'ステージ %d のミニゲームが無効です。',
     err_item             = 'アイテム「%s」は存在しません。',
     err_door             = 'ステージ %d のドア (ID %d) が ox_doorlock に存在しません。',
+    err_prop_model       = 'プロップ %d のモデル名が正しくありません。',
+    err_prop_coords      = 'プロップ %d の位置が設定されていません。',
     err_guard_model      = 'ガード %d のモデルまたは武器が無効です。',
     err_guard_coords     = 'ガード %d の位置が設定されていません。',
     err_loot_coords      = '物色ポイント %d の位置が設定されていません。',
@@ -41,6 +44,10 @@ Locales = {
     heist_not_found      = 'ヘイストが見つかりません。',
     heist_busy           = 'このヘイストは現在進行中のため変更できません。',
     cooldown_reset       = 'クールダウンをリセットしました。',
+    object_help          = '[E] このオブジェクトを選択　[Backspace] キャンセル',
+    object_none          = 'オブジェクトに照準を合わせてください',
+    place_help           = '[E] 配置　[←/→] 回転　[↑/↓] 高さ　[G] 地面に合わせる　[Backspace] キャンセル',
+    preview_invalid      = 'このモデルはゲームに存在しないか、読み込めません。',
     picker_help          = '[E] 位置を決定　[Backspace] キャンセル',
 
     -- Heist start requirements

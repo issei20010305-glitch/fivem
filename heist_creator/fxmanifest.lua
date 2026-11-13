@@ -46,6 +46,7 @@ files {
     'web/index.html',
     'web/css/*.css',
     'web/js/*.js',
+    'web/props.txt',
 }
 
 dependencies {

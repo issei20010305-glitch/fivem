@@ -20,6 +20,7 @@
                 <button class="btn primary block" data-act="new-heist">＋ 新しいヘイスト</button>
                 <div class="side-label">保存済みヘイスト</div>
                 <div id="creator-list" class="side-list"></div>
+                <button class="btn ghost block" data-act="view-taxonomy">ジャンル・タグ</button>
                 <button class="btn ghost block" data-act="view-npcs">受付NPCの設定</button>
             </aside>
             <main class="main">
@@ -36,6 +37,7 @@
         <datalist id="dl-models"></datalist>
         <datalist id="dl-weapons"></datalist>
         <div id="creator-picker" class="picker-layer hidden"></div>
+        <div id="creator-props" class="prop-layer hidden"></div>
         <div id="creator-toast" class="toast hidden"></div>
     </div>
 
@@ -62,6 +64,7 @@
                 </aside>
                 <section class="hud-list">
                     <div class="section-title">ヘイスト一覧</div>
+                    <div id="hud-filters" class="hud-filters"></div>
                     <div id="hud-heists" class="heist-grid"></div>
                 </section>
                 <aside id="hud-detail" class="hud-detail"></aside>
@@ -102,6 +105,7 @@
     <script src="js/overlay.js"></script>
     <script src="js/minigames.js"></script>
     <script src="js/creator.js"></script>
+    <script src="js/creator-extra.js"></script>
     <script src="js/hud.js"></script>
 </body>
 </html>

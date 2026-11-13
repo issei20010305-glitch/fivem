@@ -18,6 +18,7 @@ const CREATOR_TABS = [
     { id: 'alert', label: '警察への通報' },
     { id: 'stages', label: 'ステージ' },
     { id: 'guards', label: 'ガード' },
+    { id: 'props', label: 'プロップ' },
     { id: 'loots', label: '物色ポイント' },
 ];
 
@@ -34,13 +35,15 @@ function newDraft() {
         timeLimit: 30, startRadius: 15, start: null,
         areaRadius: 0, areaCenter: null,
         alertTrigger: 'arrival', alertStage: 1, alertCoords: null, alertTitle: '', alertCode: '10-90',
-        stages: [], guards: [], loots: [],
+        genre: '', tags: [],
+        stages: [], guards: [], props: [], loots: [],
     };
 }
 
 function normalizeHeist(heist) {
     const copy = JSON.parse(JSON.stringify(heist));
-    ['stages', 'guards', 'loots'].forEach((key) => { copy[key] = arr(copy[key]); });
+    ['stages', 'guards', 'loots', 'props', 'tags'].forEach((key) => { copy[key] = arr(copy[key]); });
+    copy.stages.concat(copy.loots).forEach((entry) => { entry.prop = num(entry.prop, 0); });
     copy.loots.forEach((loot) => { loot.rewards = arr(loot.rewards); });
     delete copy.rewards;
     delete copy.extraction;
@@ -88,7 +91,7 @@ function checkbox(path, label, rerender) {
     return `<label class="check"><input type="checkbox" data-path="${path}" data-type="bool"${rerender ? ' data-rerender' : ''}${getPath(Creator.draft, path) ? ' checked' : ''}><span>${esc(label)}</span></label>`;
 }
 
-function coordsControl(path, withHeading, clearable) {
+function coordsControl(path, withHeading, clearable, objectPick) {
     const c = getPath(Creator.draft, path);
     const text = c
         ? `${num(c.x).toFixed(2)}, ${num(c.y).toFixed(2)}, ${num(c.z).toFixed(2)}${withHeading ? ` / ${num(c.w).toFixed(0)}°` : ''}`
@@ -97,6 +100,7 @@ function coordsControl(path, withHeading, clearable) {
         <span class="coords-value${c || clearable ? '' : ' unset'}${c ? '' : ' dim'}">${text}</span>
         <button class="btn small" data-act="pos-current" data-arg="${path}" title="今立っている場所を設定">現在位置</button>
         <button class="btn small" data-act="pos-pick" data-arg="${path}" title="カメラで狙った場所を設定">照準で指定</button>
+        ${objectPick ? `<button class="btn small" data-act="pos-object" data-arg="${path}" title="ゲーム内に既にあるオブジェクト (金庫・ATMなど) を狙って選択">オブジェクトを選択</button>` : ''}
         <button class="btn small ghost" data-act="pos-tp" data-arg="${path}"${c ? '' : ' disabled'} title="この場所へテレポート">TP</button>
         ${clearable ? `<button class="btn small ghost" data-act="pos-clear" data-arg="${path}"${c ? '' : ' disabled'} title="未設定に戻す">解除</button>` : ''}
     </div>`;
@@ -152,6 +156,8 @@ const TAB_RENDERERS = {
         return `<div class="form-grid">
             ${field('ヘイスト名', textInput('name', { max: 48, placeholder: '例: フリーサ銀行強盗' }))}
             ${field('難易度 (表示用)', `<select data-path="difficulty" data-type="number">${difficulties.map((o) => `<option value="${o.id}"${o.id === num(d.difficulty, 1) ? ' selected' : ''}>${o.label}</option>`).join('')}</select>`)}
+            ${field('ジャンル', `<select data-path="genre"><option value="">未分類</option>${arr(Creator.meta.genres).map((genre) => `<option value="${esc(genre)}"${genre === d.genre ? ' selected' : ''}>${esc(genre)}</option>`).join('')}</select>`, 'ジャンルとタグは左下の「ジャンル・タグ」で追加できます')}
+            ${field('タグ', tagToggles())}
             ${field('説明', `<textarea data-path="description" maxlength="400" rows="4" placeholder="Heist HUDに表示される説明文">${esc(d.description)}</textarea>`, '', true)}
             ${field('画像URL', textInput('image', { max: 300, placeholder: 'https://...' }), 'Heist HUDのカードに表示されます (空欄可)', true)}
             ${field('必要ヘイストXP', numberInput('requiredXp'), 'このXP以上のプレイヤーのみ受注できます')}
@@ -223,7 +229,7 @@ const TAB_RENDERERS = {
         const d = Creator.draft;
         const cards = d.stages.map((stage, i) => listCard('stages', i, stage.label || `ステージ ${i + 1}`, `
             ${field('目標テキスト', textInput(`stages.${i}.label`, { placeholder: '例: ハッキングデバイスでセキュリティを解除せよ' }), '空欄の場合は標準の文言が表示されます', true)}
-            ${field('位置', coordsControl(`stages.${i}.coords`), '', true)}
+            ${placementFields('stages', i)}
             ${field('インタラクション方式', selectInput(`stages.${i}.interaction`, INTERACTIONS))}
             ${field('ミニゲーム', minigameButton(i))}
             ${field('ミニゲーム難易度', selectInput(`stages.${i}.difficulty`, arr(Creator.meta.difficulties)))}
@@ -258,7 +264,7 @@ const TAB_RENDERERS = {
             ${field('インタラクション方式', selectInput(`loots.${i}.interaction`, INTERACTIONS))}
             ${field('物色にかかる時間 (秒)', numberInput(`loots.${i}.duration`, { min: 1, max: 120 }))}
             <div class="field"></div>
-            ${field('位置', coordsControl(`loots.${i}.coords`), '', true)}
+            ${placementFields('loots', i)}
             <div class="field wide">
                 <span class="field-label">この物色ポイントの報酬テーブル</span>
                 ${rewardTable(i)}
@@ -342,14 +348,20 @@ function renderPicker() {
 // Rendering
 // ---------------------------------------------------------------------------
 function renderCreatorList() {
-    const list = Creator.heists.map((heist) => `
+    const item = (heist) => `
         <button class="side-item${Creator.view === 'heist' && Creator.draft && Creator.draft.id === heist.id ? ' active' : ''}" data-act="select-heist" data-arg="${heist.id}">
             <span class="side-item-name">${esc(heist.name)}</span>
             <span class="side-item-meta">
                 <span class="dot ${heist.enabled ? 'on' : 'off'}"></span>${heist.enabled ? '有効' : '無効'}
                 ・ステージ ${arr(heist.stages).length} ・XP ${num(heist.requiredXp)}
             </span>
-        </button>`).join('');
+        </button>`;
+    // Grouped by genre, in the order of the genre list; heists without one come last.
+    const genres = arr(Creator.meta.genres);
+    const groups = genres.map((genre) => ({ label: genre, heists: Creator.heists.filter((heist) => heist.genre === genre) }));
+    groups.push({ label: '未分類', heists: Creator.heists.filter((heist) => !genres.includes(heist.genre)) });
+    const list = groups.filter((group) => group.heists.length > 0).map((group) =>
+        `<div class="side-group">${esc(group.label)} <span>${group.heists.length}</span></div>${group.heists.map(item).join('')}`).join('');
     $('#creator-list').innerHTML = list || '<div class="side-empty">まだヘイストがありません</div>';
 }
 
@@ -381,6 +393,11 @@ function renderCreator() {
         $('#creator-tabs').innerHTML = '';
         $('#creator-actions').innerHTML = '<button class="btn primary" data-act="npc-save">NPCを保存</button>';
         content.innerHTML = renderNpcs();
+    } else if (Creator.view === 'taxonomy') {
+        $('#creator-title').textContent = 'ジャンル・タグ';
+        $('#creator-tabs').innerHTML = '';
+        $('#creator-actions').innerHTML = '<button class="btn primary" data-act="taxonomy-save">ジャンル・タグを保存</button>';
+        content.innerHTML = renderTaxonomy();
     } else {
         const d = Creator.draft;
         $('#creator-title').textContent = d.id ? `編集: ${d.name || `#${d.id}`}` : '新しいヘイスト';
@@ -396,6 +413,7 @@ function renderCreator() {
     }
     content.scrollTop = scroll;
     renderPicker();
+    renderPropPicker();
 }
 
 function fillDatalists() {
@@ -420,7 +438,7 @@ async function addEntry(kind) {
         const first = arr(Creator.meta.minigames).find((game) => game.group === 'basic') || arr(Creator.meta.minigames)[0];
         d.stages.push({
             label: '', coords: await post('creator:getPosition'), interaction: 'key', item: '', itemCount: 1,
-            consume: false, minigame: first ? first.id : '', difficulty: 'medium', doors: [],
+            consume: false, minigame: first ? first.id : '', difficulty: 'medium', doors: [], prop: 0,
         });
     } else if (kind === 'guards') {
         d.guards.push({
@@ -430,7 +448,7 @@ async function addEntry(kind) {
             coords: await post('creator:getPosition'),
         });
     } else if (kind === 'loots') {
-        d.loots.push({ label: '', coords: await post('creator:getPosition'), interaction: 'key', duration: 8, rewards: [] });
+        d.loots.push({ label: '', coords: await post('creator:getPosition'), interaction: 'key', duration: 8, rewards: [], prop: 0 });
     }
     renderCreator();
     const content = $('#creator-content');
@@ -674,6 +692,7 @@ on('creator:open', (data) => {
 on('creator:hide', () => $('#creator').classList.add('hidden'));
 on('creator:show', () => $('#creator').classList.remove('hidden'));
 on('creator:close', () => {
+    Creator.propPicker = null;
     Creator.picker = null;
     renderPicker();
     showPage('creator', false);

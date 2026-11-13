@@ -201,6 +201,53 @@ Config.Guards = {
 }
 
 ---------------------------------------------------------------------------
+-- Genres and tags
+-- Used to sort / filter heists in the creator and in the Heist HUD. Both lists
+-- are edited in-game (creator > ジャンル・タグ). The values below are only the
+-- starting point until an admin saves them in-game.
+---------------------------------------------------------------------------
+Config.Genres = { '小型犯罪', '中型犯罪', '大型犯罪' }
+Config.Tags = { 'コンビニ', 'フリーカ', '宝石店', '銀行' }
+
+---------------------------------------------------------------------------
+-- Props
+-- Objects that only exist while the heist is running. They spawn when a crew
+-- member gets close and are removed when the heist ends for any reason.
+---------------------------------------------------------------------------
+Config.Props = {
+    spawnDistance = 120.0,
+    -- Shown first in the prop picker (よく使う). Every other object of the game
+    -- can be found with the search bar (web/props.txt).
+    favourites = {
+        { model = 'prop_ld_int_safe_01',        label = '金庫' },
+        { model = 'p_v_43_safe_s',              label = '金庫 (小)' },
+        { model = 'h4_prop_h4_safe_01a',        label = '壁埋め込み金庫' },
+        { model = 'ch_prop_ch_vaultdoor01x',    label = '金庫室の扉' },
+        { model = 'prop_cash_pile_01',          label = '札束' },
+        { model = 'hei_prop_heist_cash_pile',   label = '札束の山' },
+        { model = 'hei_prop_hei_cash_trolly_01', label = '現金カート' },
+        { model = 'ch_prop_ch_cash_trolly_01a', label = '現金カート (カジノ)' },
+        { model = 'prop_money_bag_01',          label = '現金袋' },
+        { model = 'ch_prop_gold_bar_01a',       label = '金塊' },
+        { model = 'prop_large_gold',            label = '金塊の山' },
+        { model = 'prop_jewel_02a',             label = '宝石' },
+        { model = 'prop_laptop_01a',            label = 'ノートパソコン' },
+        { model = 'hei_prop_hst_laptop',        label = 'ハッキング用パソコン' },
+        { model = 'prop_security_case_01',      label = 'セキュリティケース' },
+        { model = 'prop_gun_case_01',           label = 'ガンケース' },
+        { model = 'prop_cs_heist_bag_02',       label = 'ダッフルバッグ' },
+        { model = 'xm_prop_x17_bag_01a',        label = 'バッグ' },
+        { model = 'prop_drug_package',          label = '薬物の包み' },
+        { model = 'prop_box_wood02a_pu',        label = '木箱' },
+        { model = 'prop_mil_crate_01',          label = '軍用クレート' },
+        { model = 'ex_prop_crate_closed_bc',    label = 'クレート' },
+        { model = 'prop_container_01a',         label = 'コンテナ' },
+        { model = 'prop_atm_01',                label = 'ATM' },
+        { model = 'prop_till_01',               label = 'レジ' },
+    },
+}
+
+---------------------------------------------------------------------------
 -- Doors (ox_doorlock, optional)
 -- In the creator each stage can list doors. They are unlocked when the stage
 -- is completed, so heists can take place inside locked MLOs.
@@ -251,6 +298,10 @@ Config.Security = {
 Config.Limits = {
     stages       = 12,
     stageDoors   = 8,
+    props        = 40,
+    genres       = 20,
+    tags         = 60,
+    heistTags    = 8,
     guards       = 40,
     loots        = 30,
     rewards      = 25,

@@ -1,6 +1,8 @@
 -- In-game configurable settings (Heist HUD NPC locations).
 Settings = {
     npcs = {},
+    genres = {}, -- ordered list of genre names
+    tags = {},   -- list of tag names
 }
 
 local function sanitizeNpc(raw)
@@ -27,6 +29,46 @@ function Settings.Load()
         if npc then npcs[#npcs + 1] = npc end
     end
     Settings.npcs = npcs
+
+    local taxonomy = DB.GetSetting('taxonomy')
+    if type(taxonomy) == 'table' then
+        Settings.genres = Settings.CleanNames(taxonomy.genres, Config.Limits.genres) or {}
+        Settings.tags = Settings.CleanNames(taxonomy.tags, Config.Limits.tags) or {}
+    else
+        Settings.genres = Settings.CleanNames(Config.Genres, Config.Limits.genres) or {}
+        Settings.tags = Settings.CleanNames(Config.Tags, Config.Limits.tags) or {}
+    end
+end
+
+---Trims, de-duplicates and limits a list of names (genres / tags).
+---@return string[]? names nil when the input is not a list
+function Settings.CleanNames(list, limit)
+    if type(list) ~= 'table' then return nil end
+    local names, seen = {}, {}
+    for i = 1, #list do
+        local name = list[i]
+        if type(name) == 'string' then
+            name = name:gsub('[%c]', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+            local length = utf8.len(name)
+            if length and length > 0 and length <= 24 and not seen[name] and #names < limit then
+                seen[name] = true
+                names[#names + 1] = name
+            end
+        end
+    end
+    return names
+end
+
+---@param genres table
+---@param tags table
+---@return boolean ok, string? error
+function Settings.SaveTaxonomy(genres, tags)
+    genres = Settings.CleanNames(genres, Config.Limits.genres)
+    tags = Settings.CleanNames(tags, Config.Limits.tags)
+    if not genres or not tags then return false, L('invalid_data') end
+    Settings.genres, Settings.tags = genres, tags
+    DB.SetSetting('taxonomy', { genres = genres, tags = tags })
+    return true
 end
 
 ---@param list table

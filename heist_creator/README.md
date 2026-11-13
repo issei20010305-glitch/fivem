@@ -80,6 +80,7 @@ party and play them together. All in-game text is Japanese.
    - **ステージ** – one card per stage: objective text, position, interaction
      (Press E / ox_target), minigame (opens the picker), difficulty, optional required item
      (and whether it is consumed).
+   - **プロップ** – objects that exist only during the heist.
    - **ガード** – NPC guards. "複製" copies a guard, then move it with "現在位置".
    - **物色ポイント** – lootable locations, how long looting takes, and the loot table of
      that point. Every row is rolled separately. "複製" copies a point with its table.
@@ -98,6 +99,43 @@ Example loot table for one loot point:
 | black_money | ✓ | 100 % | configurable |
 
 The Heist HUD NPC is placed from the creator as well (**受付NPCの設定**).
+
+## Genres and tags (ジャンル・タグ)
+
+Heists can be sorted into a **genre** (one per heist, e.g. 小型犯罪 / 中型犯罪) and any number
+of **tags** (e.g. コンビニ, フリーカ). Both lists are edited in-game: creator > ジャンル・タグ.
+Genres keep the order you give them. On a heist they are set in the 基本情報 tab.
+
+- In the creator the heist list is grouped by genre.
+- In the Heist HUD players can filter by genre, by one or more tags, and choose the order
+  (genre, required XP, XP reward, name).
+- Removing a genre or tag from the list simply hides it from heists that used it.
+
+`Config.Genres` / `Config.Tags` are only the starting values until an admin saves in-game.
+
+## Props (プロップ)
+
+The プロップ tab adds objects that exist only while the heist runs (a safe, cash, a laptop...).
+
+- **Choosing a model:** the picker has a search bar, a よく使う list with Japanese names
+  (`Config.Props.favourites`) and every object of the game (about 21,000 names in
+  `web/props.txt`). The selected model is shown **in the game world**, slowly turning, so you
+  see the real thing; ↑ / ↓ walk through the list.
+- **Placing it:** a see-through copy follows where you aim. `E` places, `←` / `→` rotate,
+  `↑` / `↓` raise or lower, `G` puts it back on the surface, `Backspace` cancels.
+- **Lifetime:** props spawn when a crew member gets close and are removed when the heist is
+  completed, failed, cancelled, times out, the crew leaves the area, everyone disconnects, or
+  the resource stops.
+
+A stage or loot point can be placed three ways (配置方法 / 位置 in its card):
+
+1. coordinates, as before (現在位置 / 照準で指定),
+2. **オブジェクトを選択** – aim at an object that already exists in the map (a safe in an MLO,
+   an ATM) and the point is put on it,
+3. **one of the heist's props** – the point always follows that prop.
+
+The list of object names comes from the open
+[gta-v-data-dumps](https://github.com/DurtyFree/gta-v-data-dumps) project.
 
 ## Police alert (警察への通報)
 
@@ -256,5 +294,6 @@ heist_creator/
 │             heists.lua, settings.lua, doors.lua, party.lua, session.lua, main.lua
 ├── client/   nui.lua, interact.lua, minigames.lua, guidance.lua, npc.lua, hud.lua,
 │             creator.lua, heist.lua, main.lua
-└── web/      index.html, css/style.css, js/ (app, overlay, minigames, creator, hud)
+└── web/      index.html, css/style.css, props.txt, js/ (app, overlay, minigames, creator,
+              creator-extra, hud)
 ```

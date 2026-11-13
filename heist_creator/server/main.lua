@@ -87,6 +87,8 @@ local function buildHud(src)
         party = party and Party.Snapshot(party) or nil,
         invites = Party.GetInvites(src),
         bonus = bonus,
+        genres = Settings.genres,
+        tags = Settings.tags,
         maxParty = Config.Party.maxSize,
         activeHeist = session and session.heist.id or nil,
     }
@@ -159,6 +161,14 @@ RegisterNetEvent('heist_creator:server:guardsSpawned', function(list)
     Sessions.RegisterGuards(source, list)
 end)
 
+register('claimProps', function(src, indices)
+    return Sessions.ClaimProps(src, indices)
+end)
+
+RegisterNetEvent('heist_creator:server:propsSpawned', function(list)
+    Sessions.RegisterProps(source, list)
+end)
+
 ---------------------------------------------------------------------------
 -- Creator (admin only, checked on every request)
 ---------------------------------------------------------------------------
@@ -199,6 +209,9 @@ local function creatorMeta()
         maxParty = Config.Party.maxSize,
         defaultNpcModel = Config.Npc.defaultModel,
         doorsAvailable = Doors.Available(),
+        genres = Settings.genres,
+        tags = Settings.tags,
+        propFavourites = Config.Props.favourites,
     }
 end
 
@@ -233,6 +246,12 @@ register('admin:resetCooldown', function(_, id)
     if not id or not Heists.list[id] then return false, L('heist_not_found') end
     Cooldowns.Clear(id)
     return true, L('cooldown_reset')
+end, true)
+
+register('admin:saveTaxonomy', function(_, genres, tags)
+    local ok, err = Settings.SaveTaxonomy(genres, tags)
+    if not ok then return false, err end
+    return true, { genres = Settings.genres, tags = Settings.tags }
 end, true)
 
 register('admin:saveNpcs', function(_, npcs)

@@ -96,6 +96,8 @@ local function snapshot(session)
     local looted, guards = {}, {}
     for i = 1, #heist.loots do looted[i] = session.looted[i] == true end
     for i = 1, #heist.guards do guards[i] = session.guards[i] ~= nil end
+    local props = {}
+    for i = 1, #(heist.props or {}) do props[i] = session.props[i] ~= nil end
 
     local members = {}
     for i = 1, #session.members do
@@ -114,6 +116,7 @@ local function snapshot(session)
         stage = session.stage,
         looted = looted,
         guards = guards,
+        props = props,
         members = members,
         leader = session.party.leader,
         npc = session.npc,
@@ -203,6 +206,7 @@ function Sessions.Start(src, heistId)
         lootLocks = {},
         stageLock = nil,
         guards = {},
+        props = {},
         reached = false,
         alerted = false,
         lootCount = 0,
@@ -251,6 +255,22 @@ local function deleteGuards(session)
     session.guards = {}
 end
 
+---Removes every prop the heist spawned. Runs whenever a session ends.
+local function deleteProps(session)
+    for index, prop in pairs(session.props) do
+        if prop.netId then
+            local entity = NetworkGetEntityFromNetworkId(prop.netId)
+            local config = session.heist.props[index]
+            -- Only ever delete an entity that really is the configured prop.
+            if entity and entity ~= 0 and DoesEntityExist(entity) and GetEntityType(entity) == 3 and config
+                and (GetEntityModel(entity) & 0xFFFFFFFF) == (GetHashKey(config.model) & 0xFFFFFFFF) then
+                DeleteEntity(entity)
+            end
+        end
+    end
+    session.props = {}
+end
+
 ---Personal cooldowns start when the heist ends. (The server-wide cooldown
 ---already started with the heist, see Sessions.Start.)
 local function applyCooldowns(session, reason)
@@ -275,6 +295,7 @@ function Sessions.End(session, reason, results)
 
     applyCooldowns(session, reason)
     deleteGuards(session)
+    deleteProps(session)
     Doors.Release(session, reason == 'restart')
 
     for i = 1, #session.members do
@@ -588,6 +609,41 @@ function Sessions.RegisterGuards(src, list)
         local guard = index and session.guards[index]
         if guard and netId and guard.owner == src and not guard.netId then
             guard.netId = netId
+        end
+    end
+end
+
+---Props work like guards: each one is handed to exactly one client to spawn.
+---@param indices number[]
+---@return number[] granted
+function Sessions.ClaimProps(src, indices)
+    local granted = {}
+    local session = Sessions.byPlayer[src]
+    if not session or type(indices) ~= 'table' then return granted end
+
+    local props = session.heist.props or {}
+    for i = 1, math.min(#indices, #props) do
+        local index = tonumber(indices[i])
+        if index and props[index] and not session.props[index] then
+            session.props[index] = { owner = src }
+            granted[#granted + 1] = index
+        end
+    end
+    if #granted > 0 then Sessions.Sync(session) end
+    return granted
+end
+
+---@param list { index: number, netId: number }[]
+function Sessions.RegisterProps(src, list)
+    local session = Sessions.byPlayer[src]
+    if not session or type(list) ~= 'table' then return end
+    for i = 1, math.min(#list, #(session.heist.props or {})) do
+        local entry = list[i]
+        local index = type(entry) == 'table' and tonumber(entry.index)
+        local netId = type(entry) == 'table' and tonumber(entry.netId)
+        local prop = index and session.props[index]
+        if prop and netId and prop.owner == src and not prop.netId then
+            prop.netId = netId
         end
     end
 end

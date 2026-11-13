@@ -94,6 +94,9 @@ function Heists.Sanitize(input)
         name           = cleanString(input.name, 48, ''),
         description    = cleanString(input.description, 400, ''),
         image          = cleanImage(input.image),
+        genre          = type(input.genre) == 'string' and Utils.Contains(Settings.genres, input.genre) and input.genre or '',
+        tags           = {},
+        props          = {},
         difficulty     = cleanNumber(input.difficulty, 1, 5, 1, true),
         requiredXp     = cleanNumber(input.requiredXp, 0, limits.xp, 0, true),
         xpReward       = cleanNumber(input.xpReward, 0, limits.xp, 0, true),
@@ -121,6 +124,48 @@ function Heists.Sanitize(input)
     if not heist.start then return nil, L('err_start') end
     if heist.maxPlayers < heist.minPlayers then heist.maxPlayers = heist.minPlayers end
 
+    -- Tags (only ones that exist in the tag list)
+    if type(input.tags) == 'table' then
+        local seen = {}
+        for i = 1, #input.tags do
+            local tag = input.tags[i]
+            if type(tag) == 'string' and not seen[tag] and Utils.Contains(Settings.tags, tag)
+                and #heist.tags < limits.heistTags then
+                seen[tag] = true
+                heist.tags[#heist.tags + 1] = tag
+            end
+        end
+    end
+
+    -- Props (objects that exist only while the heist runs)
+    if type(input.props) == 'table' then
+        if #input.props > limits.props then return nil, L('err_too_many', L('word_props'), limits.props) end
+        for i = 1, #input.props do
+            local raw = input.props[i]
+            if type(raw) ~= 'table' then return nil, L('invalid_data') end
+            local prop = {
+                model  = cleanIdentifier(raw.model, 64),
+                label  = cleanString(raw.label, 40, ''),
+                coords = cleanCoords(raw.coords, true),
+            }
+            -- Height of the model above its origin: linked interactions sit on top of it.
+            if prop.coords then prop.coords.h = Utils.Round(cleanNumber(type(raw.coords) == 'table' and raw.coords.h, 0, 30, 1.0), 2) end
+            if not prop.model then return nil, L('err_prop_model', i) end
+            if not prop.coords then return nil, L('err_prop_coords', i) end
+            prop.model = prop.model:lower()
+            heist.props[i] = prop
+        end
+    end
+
+    ---A stage / loot point can sit on one of the heist's props: its position
+    ---then always follows that prop.
+    local function linkedProp(raw)
+        local index = math.tointeger(tonumber(raw.prop) or 0) or 0
+        local prop = heist.props[index]
+        if not prop then return 0, nil end
+        return index, { x = prop.coords.x, y = prop.coords.y, z = Utils.Round(prop.coords.z + (prop.coords.h or 1.0) + 0.05, 2) }
+    end
+
     -- Stages
     if type(input.stages) ~= 'table' or #input.stages < 1 then return nil, L('err_stages') end
     if #input.stages > limits.stages then return nil, L('err_too_many', L('word_stages'), limits.stages) end
@@ -137,6 +182,9 @@ function Heists.Sanitize(input)
             minigame    = raw.minigame,
             difficulty  = difficultyExists(raw.difficulty) and raw.difficulty or 'medium',
         }
+        local stageProp, stagePropCoords = linkedProp(raw)
+        stage.prop = stageProp
+        stage.coords = stagePropCoords or stage.coords
         if not stage.coords then return nil, L('err_stage_coords', i) end
         if type(stage.minigame) ~= 'string' or not Config.Minigames[stage.minigame] then
             return nil, L('err_stage_minigame', i)
@@ -185,6 +233,9 @@ function Heists.Sanitize(input)
                 duration    = cleanNumber(raw.duration, 1, 120, 8, true),
                 rewards     = {},
             }
+            local lootProp, lootPropCoords = linkedProp(raw)
+            loot.prop = lootProp
+            loot.coords = lootPropCoords or loot.coords
             if not loot.coords then return nil, L('err_loot_coords', i) end
 
             local rewards = type(raw.rewards) == 'table' and raw.rewards or {}
@@ -220,6 +271,9 @@ function Heists.Load()
             data.guards = data.guards or {}
             data.loots = data.loots or {}
             data.areaRadius = data.areaRadius or 0
+            data.props = data.props or {}
+            data.tags = data.tags or {}
+            data.genre = data.genre or ''
             data.alertTrigger = data.alertTrigger or 'arrival'
             data.alertStage = data.alertStage or 1
             -- Heists saved before loot tables became per loot point: every
@@ -296,6 +350,15 @@ function Heists.AdminList()
     return list
 end
 
+---Tags of a heist that still exist in the tag list.
+function Heists.ValidTags(heist)
+    local tags = {}
+    for _, tag in ipairs(heist.tags or {}) do
+        if Utils.Contains(Settings.tags, tag) then tags[#tags + 1] = tag end
+    end
+    return tags
+end
+
 ---Player facing data. Never contains coordinates.
 ---@param heist table
 ---@param citizenid string
@@ -337,6 +400,8 @@ function Heists.Public(heist, citizenid, xp)
         name = heist.name,
         description = heist.description,
         image = heist.image,
+        genre = Utils.Contains(Settings.genres, heist.genre) and heist.genre or '',
+        tags = Heists.ValidTags(heist),
         difficulty = heist.difficulty,
         requiredXp = heist.requiredXp,
         xpReward = heist.xpReward,

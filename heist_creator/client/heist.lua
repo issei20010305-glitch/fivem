@@ -3,6 +3,7 @@
 -- then pushes the new state to every party member.
 local active = nil      -- { heist = table, state = table }
 local myGuards = {}     -- peds spawned by this client
+local myProps = {}      -- objects spawned by this client
 local GUARD_GROUP = GetHashKey('HEIST_CREATOR_GUARDS')
 
 local function vec(coords)
@@ -306,6 +307,76 @@ CreateThread(function()
     end
 end)
 
+---------------------------------------------------------------------------
+-- Props (only exist while the heist runs)
+---------------------------------------------------------------------------
+local function spawnProp(prop)
+    local model = GetHashKey(prop.model)
+    if not IsModelInCdimage(model) then
+        print(('[Heist Creator] invalid prop model "%s"'):format(prop.model))
+        return nil
+    end
+    if not lib.requestModel(model, 10000) then return nil end
+
+    local c = prop.coords
+    local object = CreateObjectNoOffset(model, c.x, c.y, c.z, true, true, false)
+    SetModelAsNoLongerNeeded(model)
+    if not object or object == 0 then return nil end
+
+    SetEntityAsMissionEntity(object, true, true)
+    SetEntityHeading(object, (c.w or 0.0) + 0.0)
+    FreezeEntityPosition(object, true)
+    return object
+end
+
+-- Same hand-out as the guards: the server gives each prop to exactly one client.
+CreateThread(function()
+    while true do
+        Wait(1500)
+        local props = active and active.heist.props
+        if props and #props > 0 and active.state.props then
+            local coords = GetEntityCoords(cache.ped)
+            local wanted = {}
+            for i = 1, #props do
+                if not active.state.props[i] and #(coords - vec(props[i].coords)) <= Config.Props.spawnDistance then
+                    wanted[#wanted + 1] = i
+                end
+            end
+
+            if #wanted > 0 then
+                local granted = lib.callback.await('heist_creator:claimProps', false, wanted)
+                if active and type(granted) == 'table' and #granted > 0 then
+                    local spawned = {}
+                    for i = 1, #granted do
+                        local index = granted[i]
+                        active.state.props[index] = true
+                        local object = active.heist.props[index] and spawnProp(active.heist.props[index])
+                        if object then
+                            myProps[#myProps + 1] = object
+                            spawned[#spawned + 1] = { index = index, netId = NetworkGetNetworkIdFromEntity(object) }
+                        end
+                    end
+                    if #spawned > 0 then
+                        TriggerServerEvent('heist_creator:server:propsSpawned', spawned)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+local function deleteMyProps()
+    for i = 1, #myProps do
+        local object = myProps[i]
+        if DoesEntityExist(object) then
+            if not NetworkHasControlOfEntity(object) then NetworkRequestControlOfEntity(object) end
+            SetEntityAsMissionEntity(object, true, true)
+            DeleteEntity(object)
+        end
+    end
+    myProps = {}
+end
+
 local function deleteMyGuards()
     for i = 1, #myGuards do
         local ped = myGuards[i]
@@ -327,6 +398,7 @@ local function cleanup()
     Interact.Clear()
     Guidance.Clear()
     deleteMyGuards()
+    deleteMyProps()
 end
 
 function IsInHeist()
@@ -400,5 +472,6 @@ AddEventHandler('onResourceStop', function(resource)
     Interact.Clear()
     Guidance.PruneBlips({})
     deleteMyGuards()
+    deleteMyProps()
     lib.hideTextUI()
 end)

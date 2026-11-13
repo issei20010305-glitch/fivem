@@ -10,6 +10,9 @@ const Hud = {
     signature: '',
     partySignature: '',
     busy: false,
+    genre: null,   // null = all, '' = heists without a genre
+    tags: [],      // every selected tag must be on the heist
+    sort: 'genre', // 'genre' | 'xp' | 'reward' | 'name'
 };
 
 function cooldownLeft(seconds) {
@@ -121,15 +124,87 @@ function renderParty() {
     if (typed && $('#invite-id')) $('#invite-id').value = typed;
 }
 
-function renderHeists() {
+const HUD_SORTS = [
+    { id: 'genre', label: 'ジャンル順' },
+    { id: 'xp', label: '必要XPが低い順' },
+    { id: 'reward', label: '獲得XPが多い順' },
+    { id: 'name', label: '名前順' },
+];
+
+/** Heists after the genre / tag filter, in the chosen order. */
+function visibleHeists() {
+    const genres = arr(Hud.data.genres);
+    const rank = (heist) => {
+        const index = genres.indexOf(heist.genre);
+        return index === -1 ? genres.length : index;
+    };
+    const list = arr(Hud.data.heists).filter((heist) =>
+        (Hud.genre === null || (heist.genre || '') === Hud.genre)
+        && Hud.tags.every((tag) => arr(heist.tags).includes(tag)));
+
+    const byXp = (a, b) => a.requiredXp - b.requiredXp || a.id - b.id;
+    if (Hud.sort === 'xp') list.sort(byXp);
+    else if (Hud.sort === 'reward') list.sort((a, b) => b.xpReward - a.xpReward || a.id - b.id);
+    else if (Hud.sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    else list.sort((a, b) => rank(a) - rank(b) || byXp(a, b));
+    return list;
+}
+
+function renderFilters() {
     const heists = arr(Hud.data.heists);
-    if (heists.length === 0) {
+    const genres = arr(Hud.data.genres).filter((genre) => heists.some((heist) => heist.genre === genre));
+    const tags = arr(Hud.data.tags).filter((tag) => heists.some((heist) => arr(heist.tags).includes(tag)));
+    const hasUnsorted = heists.some((heist) => !heist.genre);
+
+    // Filters that no longer match anything (an admin changed the lists) are dropped.
+    if (Hud.genre !== null && Hud.genre !== '' && !genres.includes(Hud.genre)) Hud.genre = null;
+    Hud.tags = Hud.tags.filter((tag) => tags.includes(tag));
+
+    const chip = (act, arg, label, on) => `<button class="filter-chip${on ? ' on' : ''}" data-act="${act}" data-arg="${esc(arg)}">${esc(label)}</button>`;
+    let html = '';
+    if (genres.length > 0) {
+        html += `<div class="filter-row"><span class="filter-label">ジャンル</span>
+            ${chip('filter-genre', '*', 'すべて', Hud.genre === null)}
+            ${genres.map((genre) => chip('filter-genre', genre, genre, Hud.genre === genre)).join('')}
+            ${hasUnsorted ? chip('filter-genre', '', '未分類', Hud.genre === '') : ''}
+        </div>`;
+    }
+    if (tags.length > 0) {
+        html += `<div class="filter-row"><span class="filter-label">タグ</span>
+            ${tags.map((tag) => chip('filter-tag', tag, tag, Hud.tags.includes(tag))).join('')}
+        </div>`;
+    }
+    html += `<div class="filter-row"><span class="filter-label">並び順</span>
+        <select id="hud-sort">${HUD_SORTS.map((sort) => `<option value="${sort.id}"${sort.id === Hud.sort ? ' selected' : ''}>${sort.label}</option>`).join('')}</select>
+    </div>`;
+    $('#hud-filters').innerHTML = html;
+}
+
+function renderHeists() {
+    renderFilters();
+    const all = arr(Hud.data.heists);
+    if (all.length === 0) {
         $('#hud-heists').innerHTML = '<div class="empty">現在受注できるヘイストはありません。</div>';
         return;
     }
+    const heists = visibleHeists();
+    if (heists.length === 0) {
+        $('#hud-heists').innerHTML = '<div class="empty">条件に合うヘイストがありません。</div>';
+        return;
+    }
+
+    let lastGroup = null;
     $('#hud-heists').innerHTML = heists.map((heist) => {
         const status = heistStatus(heist);
-        return `<button class="heist-card${heist.id === Hud.selected ? ' active' : ''}${heist.locked ? ' is-locked' : ''}" data-act="select" data-arg="${heist.id}">
+        let header = '';
+        if (Hud.sort === 'genre' && arr(Hud.data.genres).length > 0) {
+            const group = heist.genre || '未分類';
+            if (group !== lastGroup) {
+                lastGroup = group;
+                header = `<div class="grid-group">${esc(group)}</div>`;
+            }
+        }
+        return `${header}<button class="heist-card${heist.id === Hud.selected ? ' active' : ''}${heist.locked ? ' is-locked' : ''}" data-act="select" data-arg="${heist.id}">
             <div class="heist-image">
                 ${heist.image ? `<img src="${esc(heist.image)}" alt="" onerror="this.remove()">` : ''}
                 <span class="badge ${status.cls}">${status.text}</span>
@@ -137,6 +212,7 @@ function renderHeists() {
             <div class="heist-info">
                 <div class="heist-name">${esc(heist.name)}</div>
                 <div class="heist-meta"><span class="stars">${stars(heist.difficulty)}</span><span>+${heist.xpReward} XP</span></div>
+                <div class="heist-tags">${heist.genre ? `<span class="heist-tag genre">${esc(heist.genre)}</span>` : ''}${arr(heist.tags).map((tag) => `<span class="heist-tag">${esc(tag)}</span>`).join('')}</div>
             </div>
         </button>`;
     }).join('');
@@ -172,6 +248,7 @@ function renderDetail() {
             <div class="detail-heading">
                 <div class="detail-name">${esc(heist.name)}</div>
                 <div class="stars">${stars(heist.difficulty)} <span class="mute">難易度</span></div>
+                <div class="heist-tags">${heist.genre ? `<span class="heist-tag genre">${esc(heist.genre)}</span>` : ''}${arr(heist.tags).map((tag) => `<span class="heist-tag">${esc(tag)}</span>`).join('')}</div>
             </div>
         </div>
         <div class="detail-scroll">
@@ -206,7 +283,7 @@ function renderDetail() {
 function hudSignature() {
     const d = Hud.data;
     return JSON.stringify([
-        d.player, d.police, d.activeHeist, Hud.selected,
+        d.player, d.police, d.activeHeist, Hud.selected, Hud.genre, Hud.tags, Hud.sort, d.genres, d.tags,
         d.party ? [d.party.leader, arr(d.party.members).length] : null,
         arr(d.heists).map((heist) => Object.assign({}, heist, {
             cooldownGlobal: cooldownLeft(heist.cooldownGlobal) > 0,
@@ -292,6 +369,14 @@ const HUD_ACTIONS = {
         Hud.selected = Number(arg);
         renderHud();
     },
+    'filter-genre'(arg) {
+        Hud.genre = arg === '*' ? null : arg;
+        renderHud();
+    },
+    'filter-tag'(arg) {
+        Hud.tags = Hud.tags.includes(arg) ? Hud.tags.filter((tag) => tag !== arg) : Hud.tags.concat(arg);
+        renderHud();
+    },
     'party-create': () => partyAction('create'),
     'party-leave'() {
         Hud.nearby = null;
@@ -334,6 +419,12 @@ $('#hud').addEventListener('click', (event) => {
     if (!button || button.disabled) return;
     const action = HUD_ACTIONS[button.dataset.act];
     if (action) action(button.dataset.arg);
+});
+
+$('#hud-filters').addEventListener('change', (event) => {
+    if (event.target.id !== 'hud-sort') return;
+    Hud.sort = event.target.value;
+    renderHud();
 });
 
 on('hud:open', (data) => {
