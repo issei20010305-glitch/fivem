@@ -1,0 +1,4 @@
+backup/*
+!backup/readme.txt
+images/*
+!images/readme.txt

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Item Spawner</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="page hidden">
+        <div class="window">
+            <header class="head">
+                <div class="title">アイテムスポナー <span id="total" class="mute"></span></div>
+                <div class="search">
+                    <span class="search-icon">⌕</span>
+                    <input id="search" type="text" placeholder="アイテム名・スポーン名で検索" spellcheck="false" autocomplete="off">
+                    <button id="search-clear" class="clear hidden" title="クリア">✕</button>
+                </div>
+                <button class="icon-btn" id="close" title="閉じる">✕</button>
+            </header>
+
+            <nav id="filters" class="filters"></nav>
+
+            <div class="body">
+                <div id="grid" class="grid"></div>
+
+                <aside class="side">
+                    <div id="selected" class="selected"></div>
+
+                    <div class="section">数量</div>
+                    <div class="amount">
+                        <button class="step" data-step="-1">−</button>
+                        <input id="amount" type="number" min="1" value="1">
+                        <button class="step" data-step="1">＋</button>
+                    </div>
+                    <div id="quick" class="quick"></div>
+
+                    <div id="target-box">
+                        <div class="section">付与先</div>
+                        <input id="target" type="number" min="1" placeholder="空欄 = 自分">
+                        <small>他のプレイヤーに渡す場合はサーバーIDを入力</small>
+                    </div>
+
+                    <div class="grow"></div>
+                    <div id="message" class="message"></div>
+                    <button id="give" class="btn primary" disabled>アイテムを付与</button>
+                    <small class="hint">カードをダブルクリックしても付与できます</small>
+                </aside>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+:root {
+    --navy: #263141;      /* logo colour */
+    --deep: #0e141d;
+    --paper: #e9edf2;
+    --mist: rgba(233, 237, 242, 0.55);
+    --serif: 'Yu Mincho', 'YuMincho', 'Hiragino Mincho ProN', 'Noto Serif JP', 'MS PMincho', serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { width: 100%; height: 100%; overflow: hidden; }
+
+body {
+    font-family: var(--serif);
+    color: var(--paper);
+    background: radial-gradient(120% 90% at 50% 38%, #2b384b 0%, #1a2331 45%, var(--deep) 100%);
+    user-select: none;
+    cursor: default;
+}
+
+#rain { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(6, 9, 14, 0.6) 100%);
+}
+
+/* Logo ------------------------------------------------------------------ */
+.stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 6vh;
+    pointer-events: none;
+}
+
+.logo {
+    width: min(34vw, 62vh, 520px);
+    height: auto;
+    /* the logo file is navy: render it in paper white on the dark sky */
+    filter: brightness(0) invert(1) drop-shadow(0 0 1.6vw rgba(160, 190, 230, 0.18));
+    opacity: 0;
+    transform: translateY(0.8vh);
+    animation: rise 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s forwards;
+}
+
+.tagline {
+    margin-top: 3.2vh;
+    font-size: clamp(13px, 1.05vw, 20px);
+    letter-spacing: 0.55em;
+    text-indent: 0.55em;
+    color: var(--mist);
+    opacity: 0;
+    animation: rise 1.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.9s forwards;
+}
+
+@keyframes rise {
+    to { opacity: 0.94; transform: none; }
+}
+
+/* Vertical Japanese line ------------------------------------------------- */
+.vertical {
+    position: fixed;
+    top: 50%;
+    right: 3.4vw;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    font-size: clamp(12px, 0.9vw, 17px);
+    letter-spacing: 0.6em;
+    color: rgba(233, 237, 242, 0.45);
+    padding-top: 1.2em;
+    border-right: 1px solid rgba(233, 237, 242, 0.12);
+    padding-right: 1.1em;
+    opacity: 0;
+    animation: fade 2.4s ease 1.6s forwards;
+}
+
+@keyframes fade { to { opacity: 1; } }
+
+/* Progress --------------------------------------------------------------- */
+.foot {
+    position: fixed;
+    left: 50%;
+    bottom: 7vh;
+    width: min(30vw, 460px);
+    transform: translateX(-50%);
+    opacity: 0;
+    animation: fade 1.6s ease 1.3s forwards;
+}
+
+.foot-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.2vh;
+}
+
+.status {
+    font-size: clamp(11px, 0.82vw, 15px);
+    letter-spacing: 0.32em;
+    color: var(--mist);
+    transition: opacity 0.5s ease;
+}
+.status.swap { opacity: 0; }
+.status::after { content: '…'; margin-left: 0.2em; animation: breathe 1.8s ease-in-out infinite; }
+
+@keyframes breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+.percent {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(14px, 1.1vw, 20px);
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+}
+.percent small { font-size: 0.65em; margin-left: 0.25em; color: var(--mist); }
+
+.track { position: relative; height: 1px; background: rgba(233, 237, 242, 0.16); }
+
+.bar {
+    position: absolute;
+    left: 0;
+    top: -0.5px;
+    height: 2px;
+    width: 0%;
+    background: var(--paper);
+    box-shadow: 0 0 10px rgba(190, 215, 255, 0.55);
+}
+/* a raindrop leading the line */
+.bar::after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    top: -6px;
+    width: 8px;
+    height: 8px;
+    background: var(--paper);
+    border-radius: 0 50% 50% 50%;
+    transform: rotate(45deg);
+    box-shadow: 0 0 10px rgba(190, 215, 255, 0.7);
+}
+
+/* Sound toggle ----------------------------------------------------------- */
+.sound {
+    position: fixed;
+    left: 3.4vw;
+    bottom: 6.4vh;
+    font: inherit;
+    font-size: clamp(10px, 0.72vw, 13px);
+    letter-spacing: 0.3em;
+    color: rgba(233, 237, 242, 0.45);
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(233, 237, 242, 0.18);
+    padding: 0.4em 0.1em;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.sound:hover { color: var(--paper); }
+.sound.hidden { display: none; }
