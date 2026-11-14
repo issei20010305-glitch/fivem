@@ -76,7 +76,11 @@ OneSync (Infinity 推奨) が必須です (サーバー側でのPed生成・ル�
 
 ## 4. 管理者向け
 
-`/rpgadmin` または `/rpg → 管理` タブ。全ての管理操作はサーバー側でACE権限を再確認し、`rpg_audit_log` に記録されます。
+`/rpgadmin` または `/rpg → 管理` タブ。全ての管理操作はサーバー側で権限を再確認し、`rpg_audit_log` に記録されます。
+
+**管理者の判定** (いずれか1つでOK): ① ACE (`projectin_rpg.admin` / `group.admin` / `admin` など `Config.AdminAces`) ② Qbox の `HasPermission(src, 'admin' / 'god')` ③ `Config.AdminIdentifiers` に書いた識別子 (`fivem:` / `discord:` / `license:` など)。
+
+「権限がありません」と出る場合は、ゲーム内で **`/rpgperm`** を実行してください。各判定の結果と自分の識別子がトースト通知とサーバーコンソールに表示されます。サーバーコンソールで `test_ace player.<ID> projectin_rpg.admin` でも確認できます。どれも通らない場合は、表示された識別子を `Config.AdminIdentifiers` に追加してください。
 
 ### イベント予約 (日本時間)
 - 公開済みのダンジョン/レイドを選び、**場所の表示名** (例: `8012番地`)、開始/終了日時を `YYYY-MM-DD HH:MM` で入力します。`24:00` も使えます。

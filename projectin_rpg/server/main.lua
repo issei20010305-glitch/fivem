@@ -223,6 +223,20 @@ RegisterCommand('rpgadmin', function(src)
     TriggerClientEvent('projectin_rpg:client:openAdmin', src)
 end, false)
 
+-- 権限診断: /rpgperm (誰でも実行可。自分の識別子と判定結果のみ表示)
+RegisterCommand('rpgperm', function(src)
+    if src == 0 then return print('ゲーム内で実行してください') end
+    local r = Bridge.AdminChecks(src)
+    local lines = { ('管理者判定: %s'):format(Bridge.IsAdmin(src) and 'OK' or 'NG') }
+    for ace, v in pairs(r.aces) do lines[#lines + 1] = ('ACE %s: %s'):format(ace, v and 'OK' or '-') end
+    for perm, v in pairs(r.qbx) do lines[#lines + 1] = ('Qbox HasPermission(%s): %s'):format(perm, v and 'OK' or '-') end
+    for id in pairs(r.identifiers) do
+        if not id:find('^ip:') then lines[#lines + 1] = ('識別子 %s%s'):format(id, r.identifiers[id] and ' (許可リスト一致)' or '') end
+    end
+    print(('[projectin_rpg] /rpgperm %s (ID %d)\n  %s'):format(GetPlayerName(src) or '?', src, table.concat(lines, '\n  ')))
+    Bridge.Notify(src, table.concat(lines, ' / '), Bridge.IsAdmin(src) and 'success' or 'warning', 20000)
+end, false)
+
 -- コンソール用: rpgrole <citizenid> <tank|attacker|porter|mage|reset>
 RegisterCommand('rpgrole', function(src, args)
     if src ~= 0 and not Bridge.IsAdmin(src) then return end

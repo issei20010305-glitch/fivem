@@ -13,12 +13,20 @@ Config.TimezoneOffset = 9 * 3600
 Config.TimezoneLabel = 'JST'
 
 -------------------------------------------------------------------------------
--- 管理者権限
--- server.cfg 例:
---   add_ace group.admin projectin_rpg.admin allow
--- 下記ACEのいずれかを持つプレイヤーが管理者として扱われます。
+-- 管理者権限 (いずれか1つを満たせば管理者)
+-- 1) ACE: server.cfg 例
+--      add_ace group.admin projectin_rpg.admin allow
+-- 2) Qbox の権限: exports.qbx_core:HasPermission(src, 'admin') など
+-- 3) 識別子の直接指定 (ACEが効かない環境向け)
+-- うまく行かない場合はゲーム内で /rpgperm を実行すると判定結果が表示されます。
 -------------------------------------------------------------------------------
-Config.AdminAces = { 'projectin_rpg.admin', 'group.admin', 'group.god' }
+Config.AdminAces = { 'projectin_rpg.admin', 'group.admin', 'group.god', 'admin', 'god' }
+Config.AdminQbxPermissions = { 'admin', 'god' }
+Config.AdminIdentifiers = {
+    -- 'fivem:14668373',
+    -- 'discord:730697978083409922',
+    -- 'license:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+}
 
 -------------------------------------------------------------------------------
 -- ロール

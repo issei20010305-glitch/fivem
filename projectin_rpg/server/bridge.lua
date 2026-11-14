@@ -23,10 +23,31 @@ function Bridge.GetSourceByCitizenId(cid)
     return p and p.PlayerData and p.PlayerData.source or nil
 end
 
-function Bridge.IsAdmin(src)
-    if not src or src == 0 then return src == 0 end
+-- 管理者判定: ACE / Qbox の権限 / 識別子リスト のいずれかを満たせば管理者
+function Bridge.AdminChecks(src)
+    local res = { aces = {}, qbx = {}, identifiers = {} }
+    local s = tostring(src)
     for _, ace in ipairs(Config.AdminAces) do
-        if IsPlayerAceAllowed(src, ace) then return true end
+        res.aces[ace] = IsPlayerAceAllowed(s, ace) and true or false
+    end
+    for _, perm in ipairs(Config.AdminQbxPermissions or {}) do
+        local ok, allowed = pcall(function() return exports.qbx_core:HasPermission(src, perm) end)
+        res.qbx[perm] = ok and allowed == true
+    end
+    local allowList = {}
+    for _, id in ipairs(Config.AdminIdentifiers or {}) do allowList[id:lower()] = true end
+    for _, id in ipairs(GetPlayerIdentifiers(s) or {}) do
+        res.identifiers[id] = allowList[id:lower()] == true
+    end
+    return res
+end
+
+function Bridge.IsAdmin(src)
+    if not src then return false end
+    if src == 0 then return true end -- サーバーコンソール
+    local r = Bridge.AdminChecks(src)
+    for _, t in pairs(r) do
+        for _, v in pairs(t) do if v then return true end end
     end
     return false
 end

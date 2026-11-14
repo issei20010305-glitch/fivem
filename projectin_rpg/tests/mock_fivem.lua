@@ -277,7 +277,8 @@ function SetPlayerRoutingBucket(src, b) MOCK.buckets[src] = b end
 function GetPlayerRoutingBucket(src) return MOCK.buckets[src] or 0 end
 function SetRoutingBucketPopulationEnabled() end
 function SetRoutingBucketEntityLockdownMode() end
-function IsPlayerAceAllowed(src, ace) return src == 1 and ace == 'projectin_rpg.admin' end
+function IsPlayerAceAllowed(src, ace) return tonumber(src) == 1 and ace == 'projectin_rpg.admin' end
+function GetPlayerIdentifiers(src) return { 'license:mock' .. tostring(src), 'fivem:' .. tostring(src) } end
 local function newEntity(kind, model, x, y, z)
     MOCK.nextEntity = MOCK.nextEntity + 1
     MOCK.entities[MOCK.nextEntity] = { kind = kind, model = model, x = x, y = y, z = z, health = 200, netId = MOCK.nextEntity + 50000 }
