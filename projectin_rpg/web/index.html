@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Project IN RPG</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 常時表示レイヤー (フォーカス不要) -->
+    <div id="overlay">
+        <div id="announce-stack"></div>
+        <div id="banner" class="hidden"><div class="banner-title"></div><div class="banner-text"></div></div>
+        <div id="toasts"></div>
+        <div id="hud" class="hidden">
+            <div id="hud-top">
+                <div class="hud-runname"><span id="hud-name"></span><span id="hud-test" class="badge badge-test hidden">テストモード</span></div>
+                <div class="hud-objective">
+                    <div class="hud-wave" id="hud-wave"></div>
+                    <div class="hud-obj-title" id="hud-obj-title"></div>
+                    <div class="hud-obj-progress" id="hud-obj-progress"></div>
+                </div>
+                <div class="hud-timer" id="hud-timer">--:--</div>
+            </div>
+            <div id="hud-boss" class="hidden">
+                <div class="boss-head"><span id="boss-name"></span><span id="boss-phase"></span></div>
+                <div class="boss-bar"><div class="boss-fill" id="boss-fill"></div><div class="boss-num" id="boss-num"></div></div>
+            </div>
+            <div id="hud-party"></div>
+            <div id="hud-self">
+                <div class="self-role" id="self-role"></div>
+                <div class="bar bar-hp"><div class="fill" id="self-hp-fill"></div><span id="self-hp-text"></span></div>
+                <div class="bar bar-mp hidden" id="self-mp"><div class="fill" id="self-mp-fill"></div><span id="self-mp-text"></span></div>
+            </div>
+            <div id="hud-skills" class="hidden"></div>
+            <div id="hud-hint">/rpg: メニュー ・ E: 拾う/調べる</div>
+        </div>
+        <div id="boundary" class="hidden"><div class="warn-title">エリア外です！</div><div>戻らないと <b id="boundary-sec">5</b> 秒後に開始地点へ戻されます</div></div>
+        <div id="downed" class="hidden"><div class="downed-title">戦闘不能</div><div>魔導士の「リザレクション」かウェーブクリアで復活します</div></div>
+        <div id="progress" class="hidden"><div class="progress-label" id="progress-label"></div><div class="progress-bar"><div id="progress-fill"></div></div></div>
+    </div>
+
+    <!-- フォーカス画面 -->
+    <div id="app" class="hidden">
+        <div id="screen"></div>
+    </div>
+
+    <div id="modal-root"></div>
+    <script src="app.js"></script>
+</body>
+</html>
