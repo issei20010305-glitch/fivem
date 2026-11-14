@@ -268,3 +268,25 @@ table.tbl td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,.05); }
 .progress-label { font-weight: 800; margin-bottom: 6px; text-shadow: 0 2px 4px #000; }
 .progress-bar { height: 12px; background: rgba(0,0,0,.6); border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
 #progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--warn), #ff7a3c); }
+
+/* カスタムドロップダウン (FiveMのNUIはネイティブの<select>ポップアップを表示できないため) */
+select.dd-native { display: none !important; }
+.dd { position: relative; width: 100%; }
+.dd-btn {
+    width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+    font-family: inherit; font-size: 13px; color: var(--text); background: rgba(0,0,0,.35);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; min-height: 34px;
+}
+.dd-btn:hover, .dd.open .dd-btn { border-color: var(--accent); }
+.dd-btn .dd-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-btn .dd-label.ph { color: var(--muted); }
+.dd-btn .dd-arrow { color: var(--muted); font-size: 10px; transition: transform .15s; }
+.dd.open .dd-arrow { transform: rotate(180deg); }
+.dd-list {
+    position: fixed; z-index: 1000; max-height: 280px; overflow-y: auto; background: #1c1830;
+    border: 1px solid var(--accent); border-radius: 9px; box-shadow: 0 14px 34px rgba(0,0,0,.6); padding: 4px;
+}
+.dd-opt { padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-opt:hover { background: rgba(155,107,255,.28); }
+.dd-opt.sel { background: rgba(95,212,255,.18); color: #fff; font-weight: 700; }
+.dd-empty { padding: 8px 10px; color: var(--muted); font-size: 12px; }

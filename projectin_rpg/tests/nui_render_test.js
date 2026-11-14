@@ -29,7 +29,7 @@ const responses = {
   admin: (a) => {
     const act = a[0];
     if (act === 'nowJst') return '2026-11-14 12:00';
-    if (act === 'defs') return [{ id: 1, name: '採石場の魔窟', type: 'dungeon', status: 'published', version: 2, hasUnpublished: true, valid: true, summary: { waves: 4, enemies: 15, hasBoss: true } }, { id: 3, name: '新しいダンジョン', type: 'dungeon', status: 'draft', version: 0, valid: false, error: 'スポーン地点を1つ以上配置してください', summary: {} }];
+    if (act === 'defs') return [{ id: 1, name: '採石場の魔窟', type: 'dungeon', status: 'published', version: 2, hasUnpublished: true, valid: true, summary: { waves: 4, enemies: 15, hasBoss: true } }, { id: 2, name: 'チリアド山頂決戦', type: 'raid', status: 'published', version: 1, valid: true, summary: { waves: 2, enemies: 10, hasBoss: true } }, { id: 3, name: '新しいダンジョン', type: 'dungeon', status: 'draft', version: 0, valid: false, error: 'スポーン地点を1つ以上配置してください', summary: {} }];
     if (act === 'events') return [{ id: 1, name: '採石場の魔窟', type: 'dungeon', status: 'active', location_label: '8012番地', announceJst: '2026-11-14 12:00', startJst: '2026-11-14 12:00', endJst: '2026-11-15 00:00', registered: 0 }];
     if (act === 'templates') return [{ id: 1, name: '基本ダンジョン', kind: 'definition', data: {} }, { id: 3, name: '近接ザコ(バット)', kind: 'enemy', data: { label: 'x', model: 'g_m_y_lost_01' } }];
     if (act === 'defGet') return { id: 1, status: 'published', version: 2, data: draft };
@@ -73,6 +73,16 @@ const responses = {
   await page.click('[data-act="tab"][data-id="party"]'); await shot('04_party');
   await page.click('[data-act="tab"][data-id="inventory"]'); await page.waitForTimeout(200); await page.click('.slot[data-slot="2"]'); await shot('05_inventory');
   await page.click('[data-act="tab"][data-id="admin"]'); await shot('06_admin_events');
+  // カスタムドロップダウン: 開いて2番目を選ぶと元の select に反映される
+  const ddBefore = await page.$$eval('select', (els) => els.filter((e) => getComputedStyle(e).display !== 'none').length);
+  await page.click('#ev-def >> xpath=.. >> .dd-btn');
+  await shot('06b_dropdown_open');
+  const optCount = await page.$$eval('.dd-list .dd-opt', (els) => els.length);
+  await page.click('.dd-list .dd-opt[data-i="1"]');
+  const picked = await page.$eval('#ev-def', (e) => e.selectedIndex);
+  const endHidden = await page.$eval('#ev-end-wrap', (e) => e.classList.contains('hidden'));
+  console.log(JSON.stringify({ visibleNativeSelects: ddBefore, optCount, picked, endHidden }));
+  if (ddBefore !== 0 || optCount < 1) process.exitCode = 1;
   await page.click('[data-act="evPreview"]', {timeout: 3000}); await shot('07_admin_preview');
   await page.click('[data-act="adSub"][data-id="editor"]'); await shot('08_admin_editor_list');
   await page.click('[data-act="defEdit"][data-id="1"]'); await page.waitForTimeout(300); await shot('09_editor_basic');

@@ -1089,3 +1089,77 @@ window.addEventListener('message', (e) => {
         default: break;
     }
 });
+
+/* ===================== カスタムドロップダウン =====================
+   FiveM の CEF ではネイティブ <select> のポップアップが描画されないため、
+   全ての <select> を自前のドロップダウンで置き換える (値と change イベントは元の select に反映) */
+let ddOpen = null;
+function ddClose() {
+    if (!ddOpen) return;
+    ddOpen.list.parentNode && ddOpen.list.parentNode.removeChild(ddOpen.list);
+    ddOpen.wrap.classList.toggle('open', false);
+    ddOpen = null;
+}
+function ddSync(sel, wrap) {
+    const opt = sel.options[sel.selectedIndex];
+    const label = $('.dd-label', wrap);
+    if (opt) { label.textContent = opt.textContent; label.classList.toggle('ph', false); }
+    else { label.textContent = sel.options.length ? '選択してください' : '(選択肢がありません)'; label.classList.add('ph'); }
+}
+function ddOpenFor(sel, wrap) {
+    ddClose();
+    const btn = $('.dd-btn', wrap);
+    const r = btn.getBoundingClientRect();
+    const list = document.createElement('div');
+    list.className = 'dd-list';
+    const opts = Array.from(sel.options);
+    list.innerHTML = opts.length
+        ? opts.map((o, i) => `<div class="dd-opt ${i === sel.selectedIndex ? 'sel' : ''}" data-i="${i}">${esc(o.textContent)}</div>`).join('')
+        : '<div class="dd-empty">選択肢がありません</div>';
+    document.body.appendChild(list);
+    const h = Math.min(list.scrollHeight, 280);
+    const below = window.innerHeight - r.bottom - 8;
+    list.style.left = `${r.left}px`;
+    list.style.minWidth = `${r.width}px`;
+    list.style.maxWidth = `${Math.max(r.width, 360)}px`;
+    list.style.top = (below < h && r.top > below) ? `${Math.max(8, r.top - h - 4)}px` : `${r.bottom + 4}px`;
+    list.addEventListener('mousedown', (e) => {
+        const o = e.target.closest('.dd-opt');
+        if (!o) return;
+        e.preventDefault();
+        sel.selectedIndex = +o.dataset.i;
+        ddSync(sel, wrap);
+        ddClose();
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    wrap.classList.add('open');
+    ddOpen = { list, wrap, sel };
+    const cur = $('.dd-opt.sel', list);
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
+}
+function enhanceSelects(root) {
+    $$('select:not(.dd-native)', root).forEach((sel) => {
+        sel.classList.add('dd-native');
+        const wrap = document.createElement('div');
+        wrap.className = 'dd';
+        if (sel.getAttribute('style')) wrap.setAttribute('style', sel.getAttribute('style'));
+        wrap.innerHTML = '<button type="button" class="dd-btn"><span class="dd-label"></span><span class="dd-arrow">▼</span></button>';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        ddSync(sel, wrap);
+        $('.dd-btn', wrap).addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (ddOpen && ddOpen.sel === sel) ddClose(); else ddOpenFor(sel, wrap);
+        });
+        sel.addEventListener('change', () => ddSync(sel, wrap));
+    });
+}
+document.addEventListener('mousedown', (e) => { if (ddOpen && !e.target.closest('.dd-list') && !e.target.closest('.dd.open')) ddClose(); }, true);
+document.addEventListener('scroll', (e) => { if (ddOpen && !(e.target.closest && e.target.closest('.dd-list'))) ddClose(); }, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ddOpen) { ddClose(); e.stopImmediatePropagation(); } }, true);
+new MutationObserver((muts) => {
+    if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType !== 1 || !(n.matches('select') || n.querySelector('select'))))) return;
+    ddClose();
+    enhanceSelects(document);
+}).observe(document.body, { childList: true, subtree: true });
+enhanceSelects(document);
